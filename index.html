@@ -78,7 +78,41 @@ npm install <span class="hljs-comment">--save-dev dprint-plugin-typescript</span
     <span class="hljs-number">1</span>, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>,
     <span class="hljs-number">0</span>, <span class="hljs-number">1</span>, <span class="hljs-number">0</span>,
     <span class="hljs-number">0</span>, <span class="hljs-number">0</span>, <span class="hljs-number">1</span>
-];</code></pre><p><a href="https://dprint.dev/playground/#code/PTAEBMAcCcEsDsAuBaWBzeB7aBTAsAFADGm8AzoqLODkrIgJ6gC8oA2oaF6AIwA0oAAwDhnbsN4i+YrhIk9CAXQDchQiFDZQOAG60AdIbXFSFblRp1GAJm6tgAKggwEKdFlygHYDgXP8hKRlAyUDguQEFAhUgA/config/N4IgNglgdgpg6hAJgFwBYgFwA4AMAaEaRGKZBFdDAFgIFcBnGAFQEMAjezAMxbEYMYBbCAGEA9mDFROGZACdaMAdADmYGAEVaY5DBk8+SkPJYRIUFeMGCWMkLABuMOSDqMAQnJYBjPZhAA7qgkAHI6AMqq6gAy0DCuIGxevgAKYvQQyBBS-rAAHsixsACSXAASLBaqCRkW6u5iiACeaRlZORggNtDIplAJ+cjipHISAGKSAa2Z2f2dg0XxBFxicr4AsrRgWYsAgnIqtIIkyPq8-CArazCb2xCLKSxex7pyZ4YEJEcAIjDeYE8WO0oAA6Y6CNjOcIABx81U63VIfQST1GATGtCg3mBAFE8tC5HoMlIQQwYI9CaRgow7IjetAQABfIA">Playground</a></p><h2 id="jsonc">JSONC</h2><p><em>dprint</em> has support for JSONC (JSON with comments) via the <em>dprint-plugin-jsonc</em> plugin.</p><p>Install:</p><pre><code class="bash language-bash">yarn add --dev dprint dprint-<span class="hljs-keyword">plugin</span>-typescript dprint-<span class="hljs-keyword">plugin</span>-jsonc
+];</code></pre><p><a href="https://dprint.dev/playground/#code/PTAEBMAcCcEsDsAuBaWBzeB7aBTAsAFADGm8AzoqLODkrIgJ6gC8oA2oaF6AIwA0oAAwDhnbsN4i+YrhIk9CAXQDchQiFDZQOAG60AdIbXFSFblRp1GAJm6tgAKggwEKdFlygHYDgXP8hKRlAyUDguQEFAhUgA/config/N4IgNglgdgpg6hAJgFwBYgFwA4AMAaEaRGKZBFdDAFgIFcBnGAFQEMAjezAMxbEYMYBbCAGEA9mDFROGZACdaMAdADmYGAEVaY5DBk8+SkPJYRIUFeMGCWMkLABuMOSDqMAQnJYBjPZhAA7qgkAHI6AMqq6gAy0DCuIGxevgAKYvQQyBBS-rAAHsixsACSXAASLBaqCRkW6u5iiACeaRlZORggNtDIplAJ+cjipHISAGKSAa2Z2f2dg0XxBFxicr4AsrRgWYsAgnIqtIIkyPq8-CArazCb2xCLKSxex7pyZ4YEJEcAIjDeYE8WO0oAA6Y6CNjOcIABx81U63VIfQST1GATGtCg3mBAFE8tC5HoMlIQQwYI9CaRgow7IjetAQABfIA">Playground</a></p><h3 id="multi-line-arguments-and-parameters">Multi-line arguments and parameters</h3><p>When the first parameter or argument is placed on a different line than the open parenthesis, the entire argument or parameter list will be come multi-line.</p><p>For example:</p><pre><code class="ts language-ts">callExpr(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>);
+<span class="hljs-comment">// formats as</span>
+callExpr(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>);
+
+<span class="hljs-comment">// but...</span>
+callExpr(
+    <span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>);
+<span class="hljs-comment">// formats as</span>
+callExpr(
+    <span class="hljs-number">1</span>,
+    <span class="hljs-number">2</span>,
+    <span class="hljs-number">3</span>
+);</code></pre><p>To switch back to a single line, place the first argument or parameter on the same line as the open parenthesis:</p><pre><code class="ts language-ts">callExpr(<span class="hljs-number">1</span>,
+    <span class="hljs-number">2</span>,
+    <span class="hljs-number">3</span>
+);
+<span class="hljs-comment">// formats as</span>
+callExpr(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>);</code></pre><h3 id="explicit-newlines">Explicit Newlines</h3><p>For the most part, dprint allows you to place certain nodes like binary, logical, and property access expressions on different lines as you see fit. It does this because newlines can often convey meaning or grouping.</p><pre><code class="ts language-ts"><span class="hljs-comment">// formats this as-is</span>
+<span class="hljs-keyword">const</span> mathResult = <span class="hljs-number">1</span> + <span class="hljs-number">2</span> * <span class="hljs-number">6</span>
+    + moreMath * math;
+
+expect(someFunctionCall(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>))
+    .to.equal(<span class="hljs-number">5</span>);</code></pre><p>Also, placing a node on the next line after an open paren will indent the text within the parens.</p><pre><code class="ts language-ts"><span class="hljs-keyword">const</span> mathResult = (
+    <span class="hljs-number">1</span> + <span class="hljs-number">2</span>);
+<span class="hljs-comment">// formats as</span>
+<span class="hljs-keyword">const</span> mathResult = (
+    <span class="hljs-number">1</span> + <span class="hljs-number">2</span>
+);</code></pre><p>The same happens with statements like if statements.</p><pre><code class="ts language-ts"><span class="hljs-keyword">if</span> (
+    someCondition &amp;&amp; otherCondition) {
+}
+<span class="hljs-comment">// formats as</span>
+<span class="hljs-keyword">if</span> (
+    someCondition &amp;&amp; otherCondition
+) {
+}</code></pre><p><a href="https://dprint.dev/playground/#code/MYewdgzgLgBAtgQygCwEoFMIFcA2sC8MAjDANQwBMMAVDAGwCwAUDK2fCAE7oCySyNePwDczZugAeAB3TAoACggg46AGJYwcgJbgAwghw55RADSUAlOeZsYAOighb6AI5YD8gKznRTZqEiwiCgY2HhUhPLWbCTkFN5iTFoAZjCRLGxKKrrgACZaUDpgMABkxTAgKOic2WB5BeDmMADezAC+QA/config/N4IgNglgdgpg6hAJgFwBYgFwA4AMAaEaRGKZBFdDAFgIFcBnGAFQEMAjezAMxbEYMYBbCAGEA9mDFROGZACdaMAdADmYGAEVaY5DBk8+SkPJYRIUFeMGCWMkLABuMOSDqMAQnJYBjPZhAA7qgkAHI6AMqq6gAy0DCuIGxevgAKYvQQyBBS-rAAHsixsACSXAASLBaqCRkW6u5iiACeaRlZORggNtDIplAJ+cjipHISAGKSAa2Z2f2dg0XxBFxicr4AsrRgWYsAgnIqtIIkyPq8-CArazCb2xCLKSxex7pyZ4YEJEcAIjDeYE8WO0oAA6Y6CNjOcIABx81U63VIfQST1GATGtCg3mBAFE8tC5HoMlIQQwYI9CaRgow7IjetAQABfIA">Playground</a></p><h3 id="statement--member-spacing">Statement &amp; Member Spacing</h3><p>Line breaks are maintained, but not when they are consecutive or if they are at the beginning or end of a block.</p><p><a href="https://dprint.dev/playground/#code/GYVwdgxgLglg9mABAWwJ4DFzXmAFASkQG8BYAKHMSuqoHpbEAZGMAU0QCMAnVgQwGsAzogDuMADbjO7ZLxZQ5bACYAaTiCiIwcTSIAWrJFAOpEvHuUtkaNeoggJBrCBpgA3dnC6IYwRMdZTc3ZeTQDpAHMWMBYIxC9EQyV4v15OcTgIfgA6KxtqHigQLiQAVgBuKwBfK3lWLmBeCHYAWVQASTAoesbm4jzqAAcuOEGALkRBKC5Yyop5mh0DLgAFEfGtEGQOernKamRWYzglAgmwLZ2uOcWArhajvROzxDc4GCU9siqgA/config/N4IgNglgdgpg6hAJgFwBYgFwA4AMAaEaRGKZBFdDAFgIFcBnGAFQEMAjezAMxbEYMYBbCAGEA9mDFROGZACdaMAdADmYGAEVaY5DBk8+SkPJYRIUFeMGCWMkLABuMOSDqMAQnJYBjPZhAA7qgkAHI6AMqq6gAy0DCuIGxevgAKYvQQyBBS-rAAHsixsACSXAASLBaqCRkW6u5iiACeaRlZORggNtDIplAJ+cjipHISAGKSAa2Z2f2dg0XxBFxicr4AsrRgWYsAgnIqtIIkyPq8-CArazCb2xCLKSxex7pyZ4YEJEcAIjDeYE8WO0oAA6Y6CNjOcIABx81U63VIfQST1GATGtCg3mBAFE8tC5HoMlIQQwYI9CaRgow7IjetAQABfIA">Playground</a></p><h2 id="jsonc">JSONC</h2><p><em>dprint</em> has support for JSONC (JSON with comments) via the <em>dprint-plugin-jsonc</em> plugin.</p><p>Install:</p><pre><code class="bash language-bash">yarn add --dev dprint dprint-<span class="hljs-keyword">plugin</span>-typescript dprint-<span class="hljs-keyword">plugin</span>-jsonc
 # or
 npm install --<span class="hljs-keyword">save</span>-dev dprint dprint-<span class="hljs-keyword">plugin</span>-typescript dprint-<span class="hljs-keyword">plugin</span>-jsonc</code></pre><p>Add it to <em>dprint.config.js</em>:</p><pre><code class="js language-js"><span class="hljs-comment">// @ts-check</span>
 <span class="hljs-keyword">const</span> { JsoncPlugin } = require(<span class="hljs-string">"dprint-plugin-jsonc"</span>);
