@@ -4,7 +4,7 @@
 
       gtag('config', 'UA-55630862-3');</script><meta charset="utf-8"><title>dprint - Code Formatter</title><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000000"><meta name="Description" content="A configurable and plugable TypeScript and JSONC code formatter."><link rel="stylesheet" href="index.css"></head><body><header id="appHeader"><h1 id="title"><a href="/">dprint</a></h1><div id="headerRight"><a href="/">Overview</a> <a href="/playground">Playground</a> <a href="https://github.com/dsherret/dprint" rel="noopener noreferrer">View on GitHub</a></div></header><div id="content"><h1 id="dprint">dprint</h1><p>dprint is a configurable and plugable code formatter.</p><p>Currently only TypeScript and JSONC is supported.</p><h2 id="install">Install</h2><p>Install dprint and the plugins you want to use as a dev dependency.</p><p>For example:</p><pre><code class="bash language-bash">yarn add --dev dprint dprint-<span class="hljs-keyword">plugin</span>-typescript dprint-<span class="hljs-keyword">plugin</span>-jsonc
 # or
-npm install --<span class="hljs-keyword">save</span>-dev dprint dprint-<span class="hljs-keyword">plugin</span>-typescript dprint-<span class="hljs-keyword">plugin</span>-jsonc</code></pre><h2 id="setup-and-usage">Setup and Usage</h2><p>Create a <em>dprint.config.js</em> file in the repo. Here's an example (you don't need to copy this—use your own config):</p><pre><code class="js language-js"><span class="hljs-comment">// @ts-check</span>
+npm install --<span class="hljs-keyword">save</span>-dev dprint dprint-<span class="hljs-keyword">plugin</span>-typescript dprint-<span class="hljs-keyword">plugin</span>-jsonc</code></pre><h2 id="setup-and-usage">Setup and Usage</h2><p>Run <code>npx dprint --init</code> in the repository's main directory to create a <em>dprint.config.js</em> file.</p><p>Here's an example:</p><pre><code class="js language-js"><span class="hljs-comment">// @ts-check</span>
 <span class="hljs-class">const </span>{ TypeScriptPlugin } = require(<span class="hljs-string">"dprint-plugin-typescript"</span>);
 <span class="hljs-class">const </span>{ JsoncPlugin } = require(<span class="hljs-string">"dprint-plugin-jsonc"</span>);
 
@@ -18,14 +18,17 @@ module.exports.config = {
             <span class="hljs-string">"tryStatement.nextControlFlowPosition"</span>: <span class="hljs-string">"sameLine"</span>
         }),
         new JsoncPlugin({
-<span class="hljs-symbol">            indentWidth:</span> <span class="hljs-number">2</span>,
-<span class="hljs-symbol">            lineWidth:</span> <span class="hljs-number">80</span>
+<span class="hljs-symbol">            indentWidth:</span> <span class="hljs-number">2</span>
         })
-    ]
+    ],
+    <span class="hljs-comment">// this could also be specified as a command line argument</span>
+<span class="hljs-symbol">    includes:</span> [<span class="hljs-string">"**/*{.ts,.tsx,.json,.js}"</span>],
+    <span class="hljs-comment">// optionally specify file globs for files to ignore</span>
+<span class="hljs-symbol">    excludes:</span> []
 };</code></pre><p>Add a format script to your <em>package.json</em>'s "scripts" section (see <code>npx dprint --help</code> for usage):</p><pre><code class="ts language-ts">{
   <span class="hljs-attr">"name"</span>: <span class="hljs-string">"your-package-name"</span>,
   <span class="hljs-attr">"scripts"</span>: {
-    <span class="hljs-attr">"format"</span>: <span class="hljs-string">"dprint \"**/*{.ts,.tsx,.json,.js}\""</span>
+    <span class="hljs-attr">"format"</span>: <span class="hljs-string">"dprint"</span>
   }
 }</code></pre><p>Format:</p><pre><code>yarn <span class="hljs-keyword">format</span>
 <span class="hljs-meta"># or</span>
