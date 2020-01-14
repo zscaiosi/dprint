@@ -25,14 +25,14 @@ module.exports.config = {
 <span class="hljs-symbol">    includes:</span> [<span class="hljs-string">"**/*{.ts,.tsx,.json,.js}"</span>],
     <span class="hljs-comment">// optionally specify file globs for files to ignore</span>
 <span class="hljs-symbol">    excludes:</span> []
-};</code></pre><p>Add a format script to your <em>package.json</em>'s "scripts" section (see <code>npx dprint --help</code> for usage):</p><pre><code class="ts language-ts">{
+};</code></pre><p>Add a format script to your <em>package.json</em>'s "scripts" section (see <code>npx dprint --help</code> for usage):</p><pre><code class="json language-json">{
   <span class="hljs-attr">"name"</span>: <span class="hljs-string">"your-package-name"</span>,
   <span class="hljs-attr">"scripts"</span>: {
     <span class="hljs-attr">"format"</span>: <span class="hljs-string">"dprint"</span>
   }
 }</code></pre><p>Format:</p><pre><code>yarn <span class="hljs-keyword">format</span>
 <span class="hljs-meta"># or</span>
-npm <span class="hljs-keyword">run</span> <span class="hljs-keyword">format</span></code></pre><h2 id="global-configuration">Global Configuration</h2><p>There are certain non-language specific configuration that can be specified. These are specified on the main configuration object, but can be overriden on a per-language basis (with the exception of <code>projectType</code>).</p><p>For example:</p><pre><code class="ts language-ts"><span class="hljs-string">module.exports.config</span> <span class="hljs-string">=</span> <span class="hljs-string">{</span>
+npm <span class="hljs-keyword">run</span> <span class="hljs-keyword">format</span></code></pre><h2 id="global-configuration">Global Configuration</h2><p>There are certain non-language specific configuration that can be specified. These are specified on the main configuration object, but can be overriden on a per-language basis (with the exception of <code>projectType</code>).</p><p>For example:</p><pre><code class="js language-js"><span class="hljs-string">module.exports.config</span> <span class="hljs-string">=</span> <span class="hljs-string">{</span>
 <span class="hljs-attr">    projectType:</span> <span class="hljs-string">"openSource"</span><span class="hljs-string">,</span>
 <span class="hljs-attr">    lineWidth:</span> <span class="hljs-number">160</span><span class="hljs-string">,</span>
 <span class="hljs-attr">    useTabs:</span> <span class="hljs-literal">true</span><span class="hljs-string">,</span>
