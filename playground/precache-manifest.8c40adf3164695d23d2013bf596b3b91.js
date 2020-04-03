@@ -1,10 +1,10 @@
 self.__precacheManifest = (self.__precacheManifest || []).concat([
   {
-    "revision": "911553ec6a33a818a5a0",
-    "url": "/playground/c2645a2db5d5103d7f81.module.wasm"
+    "revision": "333ed88dd9d424b105f9",
+    "url": "/playground/968ddcfca4c9e709fb7c.module.wasm"
   },
   {
-    "revision": "64459712b1e34b83373a29a4bd027faf",
+    "revision": "3c0eb0f321751ffd3eef5267a643625c",
     "url": "/playground/index.html"
   },
   {
@@ -240,8 +240,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "/playground/static/js/59.4653ad49.chunk.js"
   },
   {
-    "revision": "911553ec6a33a818a5a0",
-    "url": "/playground/static/js/6.5f0cc081.chunk.js"
+    "revision": "333ed88dd9d424b105f9",
+    "url": "/playground/static/js/6.2369c90c.chunk.js"
   },
   {
     "revision": "853346053be77a115e10",
@@ -308,8 +308,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "/playground/static/js/main.81a546d6.chunk.js"
   },
   {
-    "revision": "703b2860e9ed6d3abdb7",
-    "url": "/playground/static/js/runtime-main.4e16c384.js"
+    "revision": "2af6545562bbdde1c638",
+    "url": "/playground/static/js/runtime-main.1b92eb3b.js"
   },
   {
     "revision": "a609dc0f334a7d4e64205247c4e8b97c",
