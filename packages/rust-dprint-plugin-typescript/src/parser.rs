@@ -4808,6 +4808,10 @@ fn parse_separated_values<'a>(
         let mut parsed_nodes = Vec::new();
         let nodes_count = nodes.len();
         for (i, value) in nodes.into_iter().enumerate() {
+            let (allow_inline_multi_line, allow_inline_single_line) = if let Some(value) = &value {
+                let is_last_value = i + 1 == nodes_count; // allow the last node to be single line
+                (allows_inline_multi_line(value, nodes_count > 1), is_last_value)
+            } else { (false, false) };
             let lines_span = if compute_lines_span {
                 value.as_ref().map(|x| helpers::LinesSpan{
                     start_line: x.start_line_with_comments(context),
@@ -4827,7 +4831,12 @@ fn parse_separated_values<'a>(
                     PrintItems::new()
                 }
             });
-            parsed_nodes.push(helpers::ParsedValue { items, lines_span });
+            parsed_nodes.push(helpers::ParsedValue {
+                items,
+                lines_span,
+                allow_inline_multi_line,
+                allow_inline_single_line,
+            });
         }
 
         parsed_nodes
@@ -6049,6 +6058,8 @@ fn parse_surrounded_by_tokens<'a>(
                                 parsed_comments.push(helpers::ParsedValue {
                                     items,
                                     lines_span: Some(helpers::LinesSpan { start_line, end_line }),
+                                    allow_inline_multi_line: false,
+                                    allow_inline_single_line: false,
                                 });
                             }
                         }
@@ -6120,7 +6131,7 @@ fn is_expr_template(node: &Expr) -> bool {
     }
 }
 
-fn is_arrow_function_with_expr_body<'a>(node: &'a Node) -> bool {
+fn is_arrow_function_with_expr_body(node: &Node) -> bool {
     match node {
         Node::ExprOrSpread(expr_or_spread) => {
             match &*expr_or_spread.expr {
@@ -6133,6 +6144,24 @@ fn is_arrow_function_with_expr_body<'a>(node: &'a Node) -> bool {
                 _ => false,
             }
         },
+        _ => false,
+    }
+}
+
+fn allows_inline_multi_line(node: &Node, has_siblings: bool) -> bool {
+    match node {
+        Node::FnExpr(_) | Node::ArrowExpr(_) | Node::ObjectLit(_) | Node::ArrayLit(_)
+            | Node::ObjectPat(_) | Node::ArrayPat(_)
+            | Node::TsTypeLit(_) | Node::TsTupleType(_) => true,
+        Node::ExprOrSpread(node) => allows_inline_multi_line(&(&*node.expr).into(), has_siblings),
+        Node::TaggedTpl(_) | Node::Tpl(_) | Node::CallExpr(_) => !has_siblings,
+        Node::Ident(node) => match &node.type_ann {
+            Some(type_ann) => allows_inline_multi_line(&(&type_ann.type_ann).into(), has_siblings),
+            None => false,
+        },
+        Node::AssignPat(node) => allows_inline_multi_line(&(&node.left).into(), has_siblings)
+            || allows_inline_multi_line(&(&node.right).into(), has_siblings),
+        Node::TsTypeAnn(type_ann) => allows_inline_multi_line(&(&type_ann.type_ann).into(), has_siblings),
         _ => false,
     }
 }
