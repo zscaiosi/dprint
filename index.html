@@ -23,7 +23,7 @@ npm install --save-dev dprint dprint-plugin-typescript dprint-plugin-jsonc</code
         }),
     ],
     <span class="hljs-comment">// this could also be specified as a command line argument</span>
-    <span class="hljs-attr">includes</span>: [<span class="hljs-string">"**/*.{ts,tsx,json,js,jsx}"</span>],
+    <span class="hljs-attr">includes</span>: [<span class="hljs-string">"**/*.{ts,tsx,js,jsx,json}"</span>],
     <span class="hljs-comment">// optionally specify file globs for files to ignore</span>
     <span class="hljs-attr">excludes</span>: [],
 };</code></pre><p>Add a format script to your <em>package.json</em>'s "scripts" section (see <code>npx dprint --help</code> for usage):</p><pre><code class="json language-json">{
