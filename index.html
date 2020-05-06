@@ -136,7 +136,7 @@ expect(someFunctionCall(<span class="hljs-number">1</span>, <span class="hljs-nu
 <span class="hljs-keyword">if</span> (
     someCondition &amp;&amp; otherCondition
 ) {
-}</code></pre><p><a href="https://dprint.dev/playground/#code/MYewdgzgLgBAtgQygCwEoFMIFcA2sC8MAjDANQwBMMAVDAGwCwAUDK2fCAE7oCySyNePwDczZugAeAB3TAoACggg46AGJYwcgJbgAwghw55RADSUAlOeZsYAOighb6AI5YD8gKznRTZqEiwiCgY2HhUhPLWbCTkFN5iTFoAZjCRLGxKKrrgACZaUDpgMABkxTAgKOic2WB5BeDmMADezAC+QA/config/N4IgNglgdgpg6hAJgFwBYgFwA4AMAaEaRGKZBFdDAFgIFcBnGAFQEMAjezAMxbEYMYBbCAGEA9mDFROGZACdaMAdADmYGAEVaY5DBk8+SkPJYRIUFeMGCWMkLABuMOSDqMAQnJYBjPZhAA7qgkAHI6AMqq6gAy0DCuIGxevgAKYvQQyBBS-rAAHsixsACSXAASLBaqCRkW6u5iiACeaRlZORggNtDIplAJ+cjipHISAGKSAa2Z2f2dg0XxBFxicr4AsrRgWYsAgnIqtIIkyPq8-CArazCb2xCLKSxex7pyZ4YEJEcAIjDeYE8WO0oAA6Y6CNjOcIABx81U63VIfQST1GATGtCg3mBAFE8tC5HoMlIQQwYI9CaRgow7IjetAQABfIA">Playground</a></p><h4 id="disabling-explicit-newlines">Disabling explicit newlines</h4><p>The configuration in this area is being actively developed. For now, you can disable maintaining line breaks in member expressions by setting <code>"memberExpression.maintainLineBreaks"</code> to <code>false</code>.</p><pre><code class="ts language-ts">myObject.accessing.someProperty;
+}</code></pre><p><a href="https://dprint.dev/playground/#code/MYewdgzgLgBAtgQygCwEoFMIFcA2sC8MAjDANQwBMMAVDAGwCwAUDK2fCAE7oCySyNePwDczZugAeAB3TAoACggg46AGJYwcgJbgAwghw55RADSUAlOeZsYAOighb6AI5YD8gKznRTZqEiwiCgY2HhUhPLWbCTkFN5iTFoAZjCRLGxKKrrgACZaUDpgMABkxTAgKOic2WB5BeDmMADezAC+QA/config/N4IgNglgdgpg6hAJgFwBYgFwA4AMAaEaRGKZBFdDAFgIFcBnGAFQEMAjezAMxbEYMYBbCAGEA9mDFROGZACdaMAdADmYGAEVaY5DBk8+SkPJYRIUFeMGCWMkLABuMOSDqMAQnJYBjPZhAA7qgkAHI6AMqq6gAy0DCuIGxevgAKYvQQyBBS-rAAHsixsACSXAASLBaqCRkW6u5iiACeaRlZORggNtDIplAJ+cjipHISAGKSAa2Z2f2dg0XxBFxicr4AsrRgWYsAgnIqtIIkyPq8-CArazCb2xCLKSxex7pyZ4YEJEcAIjDeYE8WO0oAA6Y6CNjOcIABx81U63VIfQST1GATGtCg3mBAFE8tC5HoMlIQQwYI9CaRgow7IjetAQABfIA">Playground</a></p><h4 id="forcing-a-line-per-expression">Forcing a Line Per Expression</h4><p>By default, dprint will leave line breaks between expressions in member expressions (ex. <code>myObj.prop</code>) and binary expressions (ex. <code>value + other</code>). If you don't want this behaviour, you can disable it by setting the following configuration:</p><ul><li><code>"memberExpression.linePerExpression": true</code></li><li><code>"binaryExpression.linePerExpression": true</code></li></ul><p>Example:</p><pre><code class="ts language-ts">myObject.accessing.someProperty;
 myObject
     .accessing.some
     .other.prop;
@@ -150,7 +150,7 @@ myObject
     .prop;
 myObject
     .myLooooooooooonnnnnggggggg
-    .propAccess;</code></pre><p>You may want to use both <code>"preferSingleLine": true</code> in combination with <code>"memberExpression.maintainLineBreaks": false</code>:</p><pre><code class="ts language-ts">myObject.accessing.someProperty;
+    .propAccess;</code></pre><p>You may want to use both <code>"preferSingleLine": true</code> in combination with this option:</p><pre><code class="ts language-ts">myObject.accessing.someProperty;
 myObject
     .accessing.some
     .other.prop;
