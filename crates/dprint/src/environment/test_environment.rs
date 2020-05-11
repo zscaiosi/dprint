@@ -3,11 +3,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use globset::{GlobSetBuilder, GlobSet, Glob};
 use super::Environment;
+use super::super::types::ErrBox;
+use async_trait::async_trait;
+use bytes::Bytes;
 
 pub struct TestEnvironment {
     files: Arc<Mutex<HashMap<PathBuf, String>>>,
     logged_messages: Arc<Mutex<Vec<String>>>,
     logged_errors: Arc<Mutex<Vec<String>>>,
+    remote_files: Arc<Mutex<HashMap<String, Bytes>>>,
 }
 
 impl TestEnvironment {
@@ -16,6 +20,7 @@ impl TestEnvironment {
             files: Arc::new(Mutex::new(HashMap::new())),
             logged_messages: Arc::new(Mutex::new(Vec::new())),
             logged_errors: Arc::new(Mutex::new(Vec::new())),
+            remote_files: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -28,8 +33,14 @@ impl TestEnvironment {
     pub fn get_logged_errors(&self) -> Vec<String> {
         self.logged_errors.lock().unwrap().clone()
     }
+
+    pub fn add_remote_file(&self, path: &str, bytes: &'static [u8]) {
+        let mut remote_files = self.remote_files.lock().unwrap();
+        remote_files.insert(String::from(path), Bytes::from(bytes));
+    }
 }
 
+#[async_trait]
 impl Environment for TestEnvironment {
     fn read_file(&self, file_path: &PathBuf) -> Result<String, String> {
         let files = self.files.lock().unwrap();
@@ -43,6 +54,29 @@ impl Environment for TestEnvironment {
         let mut files = self.files.lock().unwrap();
         files.insert(file_path.clone(), String::from(file_text));
         Ok(())
+    }
+
+    fn write_file_bytes(&self, file_path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
+        let mut files = self.files.lock().unwrap();
+        files.insert(file_path.clone(), String::from(std::str::from_utf8(bytes).unwrap()));
+        Ok(())
+    }
+
+    fn remove_file(&self, file_path: &PathBuf) -> Result<(), String> {
+        let mut files = self.files.lock().unwrap();
+        files.remove(file_path);
+        Ok(())
+    }
+
+    async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox> {
+        let remote_files = self.remote_files.lock().unwrap();
+        match remote_files.get(&String::from(url)) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Could not find file at url {}", url)
+            ))),
+        }
     }
 
     fn glob(&self, file_patterns: &Vec<String>) -> Result<Vec<PathBuf>, String> {
@@ -71,6 +105,14 @@ impl Environment for TestEnvironment {
 
     fn log_error(&self, text: &str) {
         self.logged_errors.lock().unwrap().push(String::from(text));
+    }
+
+    fn get_user_app_dir(&self) -> Result<PathBuf, String> {
+        Ok(PathBuf::from("/user"))
+    }
+
+    fn get_plugin_cache_dir(&self) -> Result<PathBuf, String> {
+        Ok(PathBuf::from("/cache"))
     }
 }
 
