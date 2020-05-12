@@ -48,6 +48,13 @@ impl Environment for RealEnvironment {
         }
     }
 
+    fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, String> {
+        match fs::read(file_path) {
+            Ok(bytes) => Ok(Bytes::from(bytes)),
+            Err(err) => Err(err.to_string()),
+        }
+    }
+
     fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), String> {
         match fs::write(file_path, file_text) {
             Ok(_) => Ok(()),

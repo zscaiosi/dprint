@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 
 pub struct TestEnvironment {
-    files: Arc<Mutex<HashMap<PathBuf, String>>>,
+    files: Arc<Mutex<HashMap<PathBuf, Bytes>>>,
     logged_messages: Arc<Mutex<Vec<String>>>,
     logged_errors: Arc<Mutex<Vec<String>>>,
     remote_files: Arc<Mutex<HashMap<String, Bytes>>>,
@@ -43,6 +43,11 @@ impl TestEnvironment {
 #[async_trait]
 impl Environment for TestEnvironment {
     fn read_file(&self, file_path: &PathBuf) -> Result<String, String> {
+        let file_bytes = self.read_file_bytes(file_path)?;
+        Ok(String::from_utf8(file_bytes.to_vec()).unwrap())
+    }
+
+    fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, String> {
         let files = self.files.lock().unwrap();
         match files.get(file_path) {
             Some(text) => Ok(text.clone()),
@@ -51,14 +56,12 @@ impl Environment for TestEnvironment {
     }
 
     fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), String> {
-        let mut files = self.files.lock().unwrap();
-        files.insert(file_path.clone(), String::from(file_text));
-        Ok(())
+        self.write_file_bytes(file_path, file_text.as_bytes())
     }
 
     fn write_file_bytes(&self, file_path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
         let mut files = self.files.lock().unwrap();
-        files.insert(file_path.clone(), String::from(std::str::from_utf8(bytes).unwrap()));
+        files.insert(file_path.clone(), Bytes::from(bytes.to_vec()));
         Ok(())
     }
 

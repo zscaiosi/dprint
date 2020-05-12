@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use super::super::environment::Environment;
 use super::manifest::*;
 use super::super::types::ErrBox;
+use super::wasm::compile;
 
 pub struct PluginCache<'a, TEnvironment> where TEnvironment : Environment {
     environment: &'a TEnvironment,
@@ -26,8 +27,11 @@ impl<'a, TEnvironment> PluginCache<'a, TEnvironment> where TEnvironment : Enviro
         let cache_dir = self.environment.get_plugin_cache_dir()?;
         let file_bytes = self.environment.download_file(url).await?;
         let cache_count = self.cache_manifest.count + 1;
-        let file_path = cache_dir.join(&format!("{}.{}", cache_count, get_url_extension(url)?));
+        let file_path = cache_dir.join(&format!("{}.compiled_wasm", cache_count));
         let url_cache_entry = UrlCacheEntry { url: String::from(url), file_path: file_path.to_string_lossy().to_string() };
+
+        self.environment.log("Compiling wasm module...");
+        let file_bytes = compile(&file_bytes)?;
 
         self.environment.write_file_bytes(&file_path, &file_bytes)?;
 
@@ -65,14 +69,6 @@ impl<'a, TEnvironment> PluginCache<'a, TEnvironment> where TEnvironment : Enviro
     }
 }
 
-fn get_url_extension(url: &str) -> Result<String, String> {
-    if let Some(ext_index) = url.rfind('.') {
-        Ok(String::from(&url[ext_index + 1..]))
-    } else {
-        Err(format!("Could not find extension for url: {}", url))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -84,13 +80,13 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_user_app_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "count": 1, "urls": [{ "url": "https://plugins.dprint.dev/test.dll", "file_path": "/my-file.dll" }] }"#
+            r#"{ "count": 1, "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_path": "/my-file.wasm" }] }"#
         ).unwrap();
 
         let mut cache = PluginCache::new(&environment).unwrap();
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.dll").await?;
+        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
 
-        assert_eq!(file_path, PathBuf::from("/my-file.dll"));
+        assert_eq!(file_path, PathBuf::from("/my-file.wasm"));
         Ok(())
     }
 
@@ -98,23 +94,23 @@ mod test {
     #[tokio::test]
     async fn it_should_download_file() -> Result<(), ErrBox> {
         let environment = TestEnvironment::new();
-        environment.add_remote_file("https://plugins.dprint.dev/test.dll", "t".as_bytes());
+        environment.add_remote_file("https://plugins.dprint.dev/test.wasm", "t".as_bytes());
 
         let mut cache = PluginCache::new(&environment).unwrap();
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.dll").await?;
-        let expected_file_path = PathBuf::from("/cache").join("1.dll");
+        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
+        let expected_file_path = PathBuf::from("/cache").join("1.wasm");
 
         assert_eq!(file_path, expected_file_path);
 
         // should be the same when requesting it again
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.dll").await?;
+        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
         assert_eq!(file_path, expected_file_path);
 
         // should have saved the manifest
         assert_eq!(
             environment.read_file(&environment.get_user_app_dir().unwrap().join("cache-manifest.json")).unwrap(),
             format!(
-                r#"{{"count":1,"urls":[{{"url":"https://plugins.dprint.dev/test.dll","file_path":"{}"}}]}}"#,
+                r#"{{"count":1,"urls":[{{"url":"https://plugins.dprint.dev/test.wasm","file_path":"{}"}}]}}"#,
                 expected_file_path.to_string_lossy().replace("\\", "\\\\")
             )
         );
@@ -126,11 +122,11 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_user_app_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "count": 1, "urls": [{ "url": "https://plugins.dprint.dev/test.dll", "file_path": "/my-file.dll" }] }"#
+            r#"{ "count": 1, "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_path": "/my-file.wasm" }] }"#
         ).unwrap();
 
         let mut cache = PluginCache::new(&environment).unwrap();
-        cache.forget_url("https://plugins.dprint.dev/test.dll").unwrap();
+        cache.forget_url("https://plugins.dprint.dev/test.wasm").unwrap();
 
         assert_eq!(
             environment.read_file(&environment.get_user_app_dir().unwrap().join("cache-manifest.json")).unwrap(),
@@ -143,13 +139,13 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_user_app_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "count": 1, "urls": [{ "url": "https://plugins.dprint.dev/test.dll", "file_path": "/my-file.dll" }] }"#
+            r#"{ "count": 1, "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_path": "/my-file.wasm" }] }"#
         ).unwrap();
-        let dll_file_path = PathBuf::from("/my-file.dll");
+        let dll_file_path = PathBuf::from("/my-file.wasm");
         environment.write_file_bytes(&dll_file_path, "t".as_bytes()).unwrap();
 
         let mut cache = PluginCache::new(&environment).unwrap();
-        cache.forget_url("https://plugins.dprint.dev/test.dll").unwrap();
+        cache.forget_url("https://plugins.dprint.dev/test.wasm").unwrap();
 
         // should delete the file too
         assert_eq!(environment.read_file(&dll_file_path).is_err(), true);

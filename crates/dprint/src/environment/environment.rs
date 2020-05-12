@@ -6,6 +6,7 @@ use super::super::types::ErrBox;
 #[async_trait]
 pub trait Environment : std::marker::Sync {
     fn read_file(&self, file_path: &PathBuf) -> Result<String, String>;
+    fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, String>;
     fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), String>;
     fn write_file_bytes(&self, file_path: &PathBuf, bytes: &[u8]) -> Result<(), String>;
     fn remove_file(&self, file_path: &PathBuf) -> Result<(), String>;

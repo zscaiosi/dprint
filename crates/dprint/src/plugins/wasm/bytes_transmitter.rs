@@ -1,23 +1,25 @@
-use super::PluginWasmFunctions;
+use std::rc::Rc;
+use super::WasmFunctions;
 
-pub struct PluginBytesTransmitter<'a> {
-    wasm_functions: &'a PluginWasmFunctions<'a>,
+pub struct BytesTransmitter<'a> {
+    wasm_functions: Rc<WasmFunctions<'a>>,
     buffer_size: usize,
 }
 
-impl<'a> PluginBytesTransmitter<'a> {
-    pub fn new(wasm_functions: &'a PluginWasmFunctions<'a>) -> Self {
-        PluginBytesTransmitter {
+impl<'a> BytesTransmitter<'a> {
+    pub fn new(wasm_functions: Rc<WasmFunctions<'a>>) -> Self {
+        let buffer_size = wasm_functions.get_wasm_memory_buffer_size();
+        BytesTransmitter {
             wasm_functions,
-            buffer_size: wasm_functions.get_wasm_memory_buffer_size()
+            buffer_size,
         }
     }
 
     pub fn send_string(&self, text: &str) {
-        self.wasm_functions.clear_shared_bytes();
         let mut index = 0;
         let len = text.len();
         let text_bytes = text.as_bytes();
+        self.wasm_functions.clear_shared_bytes(len);
         while index < len {
             let write_count = std::cmp::min(len - index, self.buffer_size);
             self.write_bytes_to_memory_buffer(&text_bytes[index..(index + write_count)]);

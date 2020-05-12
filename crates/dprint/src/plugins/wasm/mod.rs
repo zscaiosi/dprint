@@ -1,5 +1,11 @@
 mod bytes_transmitter;
+mod compile;
 mod functions;
+mod load;
+mod plugin;
 
-pub use functions::*;
-pub use bytes_transmitter::*;
+use bytes_transmitter::*;
+pub use compile::*;
+use functions::*;
+pub use load::*;
+pub use plugin::*;
