@@ -4,7 +4,7 @@ pub use super::super::super::types::{ErrBox, Error};
 pub fn load(compiled_module_bytes: &[u8]) -> Result<wasmer_runtime::Instance, ErrBox> {
     let artifact = match wasmer_runtime::cache::Artifact::deserialize(&compiled_module_bytes) {
         Ok(artifact) => artifact,
-        Err(err) => { return Err(Error::new(&format!("Error deserializing compiled wasm module: {:?}", err))); }
+        Err(err) => { return err!("Error deserializing compiled wasm module: {:?}", err); }
     };
     let compiler = wasmer_runtime::compiler_for_backend(wasmer_runtime::Backend::default()).expect("Expect to have a compiler");
     let module = unsafe { wasmer_runtime_core::load_cache_with(artifact, &*compiler).unwrap() };

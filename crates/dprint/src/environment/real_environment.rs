@@ -13,24 +13,6 @@ pub struct RealEnvironment {
     output_lock: Arc<Mutex<u8>>,
 }
 
-#[derive(Debug)]
-pub struct DownloadError {
-    message: String,
-}
-
-impl DownloadError {
-    pub fn new(message: &str) -> DownloadError {
-        DownloadError { message: String::from(message) }
-    }
-}
-
-impl std::error::Error for DownloadError {}
-impl std::fmt::Display for DownloadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
 impl RealEnvironment {
     pub fn new() -> RealEnvironment {
         RealEnvironment { output_lock: Arc::new(Mutex::new(0)), }
@@ -41,39 +23,29 @@ const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo { name: "Dprint", author: 
 
 #[async_trait]
 impl Environment for RealEnvironment {
-    fn read_file(&self, file_path: &PathBuf) -> Result<String, String> {
-        match fs::read_to_string(file_path) {
-            Ok(text) => Ok(text),
-            Err(err) => Err(err.to_string()),
-        }
+    fn read_file(&self, file_path: &PathBuf) -> Result<String, ErrBox> {
+        let text = fs::read_to_string(file_path)?;
+        Ok(text)
     }
 
-    fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, String> {
-        match fs::read(file_path) {
-            Ok(bytes) => Ok(Bytes::from(bytes)),
-            Err(err) => Err(err.to_string()),
-        }
+    fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, ErrBox> {
+        let bytes = fs::read(file_path)?;
+        Ok(Bytes::from(bytes))
     }
 
-    fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), String> {
-        match fs::write(file_path, file_text) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err.to_string()),
-        }
+    fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), ErrBox> {
+        fs::write(file_path, file_text)?;
+        Ok(())
     }
 
-    fn write_file_bytes(&self, file_path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
-        match fs::write(file_path, bytes) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err.to_string()),
-        }
+    fn write_file_bytes(&self, file_path: &PathBuf, bytes: &[u8]) -> Result<(), ErrBox> {
+        fs::write(file_path, bytes)?;
+        Ok(())
     }
 
-    fn remove_file(&self, file_path: &PathBuf) -> Result<(), String> {
-        match fs::remove_file(file_path) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err.to_string()),
-        }
+    fn remove_file(&self, file_path: &PathBuf) -> Result<(), ErrBox> {
+        fs::remove_file(file_path)?;
+        Ok(())
     }
 
     async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox> {
@@ -84,9 +56,7 @@ impl Environment for RealEnvironment {
             if resp.status().is_success() {
                 resp.content_length()
             } else {
-                return Err(Box::new(DownloadError::new(
-                    &format!("Error downloading: {}. Status: {:?}", url, resp.status())
-                )));
+                return err!("Error downloading: {}. Status: {:?}", url, resp.status());
             }
         };
 
@@ -109,17 +79,17 @@ impl Environment for RealEnvironment {
         Ok(final_bytes.freeze())
     }
 
-    fn glob(&self, file_patterns: &Vec<String>) -> Result<Vec<PathBuf>, String> {
+    fn glob(&self, file_patterns: &Vec<String>) -> Result<Vec<PathBuf>, ErrBox> {
         let walker = match globwalk::GlobWalkerBuilder::from_patterns(&PathBuf::from("."), file_patterns).follow_links(true).build() {
             Ok(walker) => walker,
-            Err(err) => return Err(format!("Error parsing file patterns: {}", err)),
+            Err(err) => return err!("Error parsing file patterns: {}", err),
         };
 
         let mut file_paths = Vec::new();
         for result in walker.into_iter() {
             match result {
                 Ok(result) => { file_paths.push(result.into_path()); },
-                Err(err) => return Err(format!("Error walking files: {}", err)),
+                Err(err) => return err!("Error walking files: {}", err),
             }
         }
 
@@ -140,17 +110,17 @@ impl Environment for RealEnvironment {
         eprintln!("{}", text);
     }
 
-    fn get_user_app_dir(&self) -> Result<PathBuf, String> {
+    fn get_user_app_dir(&self) -> Result<PathBuf, ErrBox> {
         match app_dirs::app_root(app_dirs::AppDataType::UserConfig, &APP_INFO) {
             Ok(path) => Ok(path),
-            Err(err) => Err(format!("Error getting app directory: {:?}", err)),
+            Err(err) => err!("Error getting app directory: {:?}", err),
         }
     }
 
-    fn get_plugin_cache_dir(&self) -> Result<PathBuf, String> {
+    fn get_plugin_cache_dir(&self) -> Result<PathBuf, ErrBox> {
         match app_dirs::app_dir(app_dirs::AppDataType::UserCache, &APP_INFO, "cache/plugins") {
             Ok(path) => Ok(path),
-            Err(err) => Err(format!("Error getting app directory: {:?}", err)),
+            Err(err) => err!("Error getting app directory: {:?}", err),
         }
     }
 }

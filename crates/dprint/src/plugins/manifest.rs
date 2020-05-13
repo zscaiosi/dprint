@@ -2,6 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 
 use super::super::environment::Environment;
+use super::super::types::ErrBox;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CacheManifest {
@@ -21,7 +22,7 @@ pub struct UrlCacheEntry {
     pub file_path: String,
 }
 
-pub fn read_manifest(environment: &impl Environment) -> Result<CacheManifest, String> {
+pub fn read_manifest(environment: &impl Environment) -> Result<CacheManifest, ErrBox> {
     let file_path = get_manifest_file_path(environment)?;
     let manifest_file_text = match environment.read_file(&file_path) {
         Ok(text) => Some(text),
@@ -42,13 +43,13 @@ pub fn read_manifest(environment: &impl Environment) -> Result<CacheManifest, St
     }
 }
 
-pub fn write_manifest(manifest: &CacheManifest, environment: &impl Environment) -> Result<(), String> {
+pub fn write_manifest(manifest: &CacheManifest, environment: &impl Environment) -> Result<(), ErrBox> {
     let file_path = get_manifest_file_path(environment)?;
     let serialized_manifest = serde_json::to_string(&manifest).unwrap();
     environment.write_file(&file_path, &serialized_manifest)
 }
 
-fn get_manifest_file_path(environment: &impl Environment) -> Result<PathBuf, String> {
+fn get_manifest_file_path(environment: &impl Environment) -> Result<PathBuf, ErrBox> {
     let app_dir = environment.get_user_app_dir()?;
     Ok(app_dir.join("cache-manifest.json"))
 }

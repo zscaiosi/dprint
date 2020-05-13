@@ -1,24 +1,22 @@
-use std::collections::HashMap;
-use dprint_core::plugins::Formatter;
 use clap::{App, Arg, Values, ArgMatches};
-use rayon::prelude::*;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use super::environment::Environment;
 use super::configuration;
 use super::configuration::{ConfigMap, ConfigMapValue};
-use super::create_formatter::{create_formatter, get_uninitialized_plugins};
+use super::create_formatter::{create_formatter, Formatter};
+use super::plugins::{PluginContainer};
+use super::types::ErrBox;
 
-pub fn run_cli(environment: &impl Environment, args: Vec<String>) -> Result<(), String> {
+pub async fn run_cli(environment: &impl Environment, args: Vec<String>) -> Result<(), ErrBox> {
     let cli_parser = create_cli_parser();
     let matches = match cli_parser.get_matches_from_safe(args) {
         Ok(result) => result,
-        Err(err) => return Err(err.to_string()),
+        Err(err) => return err!("{}", err.to_string()),
     };
 
     if matches.is_present("version") {
-        output_version(environment);
-        return Ok(());
+        return output_version(&matches, environment).await;
     }
     if matches.is_present("init") {
         init_config_file(environment)?;
@@ -26,7 +24,7 @@ pub fn run_cli(environment: &impl Environment, args: Vec<String>) -> Result<(), 
         return Ok(());
     }
 
-    let mut config_map = deserialize_config_file(matches.value_of("config"), environment)?;
+    let mut config_map = get_config_map_from_matches(&matches, environment)?;
     check_project_type_diagnostic(&mut config_map, environment);
     let file_paths = resolve_file_paths(&mut config_map, &matches, environment)?;
 
@@ -35,7 +33,8 @@ pub fn run_cli(environment: &impl Environment, args: Vec<String>) -> Result<(), 
         return Ok(());
     }
 
-    let formatter = create_formatter(config_map, environment)?;
+    let plugins = load_plugins(&mut config_map, environment).await?;
+    let formatter = create_formatter(config_map, plugins, environment)?;
 
     if matches.is_present("output-resolved-config") {
         output_resolved_config(&formatter, environment);
@@ -51,11 +50,27 @@ pub fn run_cli(environment: &impl Environment, args: Vec<String>) -> Result<(), 
     Ok(())
 }
 
-fn output_version(environment: &impl Environment) {
+async fn output_version<'a>(matches: &ArgMatches<'a>, environment: &impl Environment) -> Result<(), ErrBox> {
+    // log the cli's current version first
     environment.log(&format!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")));
-    for plugin in get_uninitialized_plugins().iter() {
-        environment.log(&format!("{} v{}", plugin.name(), plugin.version()));
+
+    // now check for the plugins
+    match get_config_map_from_matches(matches, environment) {
+        Ok(config_map) => {
+            let mut config_map = config_map;
+            let plugins = load_plugins(&mut config_map, environment).await?;
+
+            // output their names and versions
+            for plugin in plugins.iter() {
+                environment.log(&format!("{} v{}", plugin.name(), plugin.version()));
+            }
+        },
+        Err(_) => {
+            // ignore
+        }
     }
+
+    Ok(())
 }
 
 fn output_file_paths<'a>(file_paths: impl Iterator<Item=&'a PathBuf>, environment: &impl Environment) {
@@ -70,19 +85,20 @@ fn output_resolved_config(formatter: &Formatter, environment: &impl Environment)
     }
 }
 
-fn init_config_file(environment: &impl Environment) -> Result<(), String> {
+fn init_config_file(environment: &impl Environment) -> Result<(), ErrBox> {
     let config_file_path = PathBuf::from("./dprint.config.json");
     if !environment.path_exists(&config_file_path) {
         environment.write_file(&config_file_path, configuration::get_init_config_file_text())
     } else {
-        Err(String::from("Configuration file 'dprint.config.json' already exists in current working directory."))
+        err!("Configuration file 'dprint.config.json' already exists in current working directory.")
     }
 }
 
 fn check_files(environment: &impl Environment, formatter: Formatter, file_paths: Vec<PathBuf>) -> Result<(), String> {
     let not_formatted_files_count = AtomicUsize::new(0);
 
-    file_paths.par_iter().for_each(|file_path| {
+    // todo: parallelize
+    for file_path in file_paths {
         let file_contents = environment.read_file(&file_path);
         match file_contents {
             Ok(file_contents) => {
@@ -102,7 +118,7 @@ fn check_files(environment: &impl Environment, formatter: Formatter, file_paths:
                 output_error(environment, &file_path, "Error reading file", &e);
             },
         }
-    });
+    }
 
     let not_formatted_files_count = not_formatted_files_count.load(Ordering::SeqCst);
     if not_formatted_files_count == 0 {
@@ -117,7 +133,8 @@ fn format_files(environment: &impl Environment, formatter: Formatter, file_paths
     let formatted_files_count = AtomicUsize::new(0);
     let files_count = file_paths.len();
 
-    file_paths.par_iter().for_each(|file_path| {
+    // todo: parallelize
+    for file_path in file_paths {
         let file_contents = environment.read_file(&file_path);
 
         match file_contents {
@@ -139,7 +156,7 @@ fn format_files(environment: &impl Environment, formatter: Formatter, file_paths
             },
             Err(e) => output_error(environment, &file_path, "Error reading file", &e),
         }
-    });
+    }
 
     let formatted_files_count = formatted_files_count.load(Ordering::SeqCst);
     if formatted_files_count > 0 {
@@ -216,6 +233,11 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
 }
 
+async fn load_plugins(config_map: &mut ConfigMap, environment: &impl Environment) -> Result<PluginContainer, ErrBox> {
+    let plugins = take_array_from_config_map(config_map, "plugins")?;
+    super::plugins::load_plugins(plugins, environment).await
+}
+
 fn check_project_type_diagnostic(config_map: &mut ConfigMap, environment: &impl Environment) {
     if !config_map.is_empty() {
         if let Some(diagnostic) = configuration::handle_project_type_diagnostic(config_map) {
@@ -224,25 +246,19 @@ fn check_project_type_diagnostic(config_map: &mut ConfigMap, environment: &impl 
     }
 }
 
-fn deserialize_config_file(config_path: Option<&str>, environment: &impl Environment) -> Result<ConfigMap, String> {
-    if let Some(config_path) = config_path {
-        let config_file_text = match environment.read_file(&PathBuf::from(config_path)) {
-            Ok(contents) => contents,
-            Err(e) => return Err(e.to_string()),
-        };
+fn deserialize_config_file(config_path: Option<&str>, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
+    let config_path = config_path.unwrap_or("./dprint.config.json");
+    let config_file_text = environment.read_file(&PathBuf::from(config_path))?;
 
-        let result = match configuration::deserialize_config(&config_file_text) {
-            Ok(map) => map,
-            Err(e) => return Err(format!("Error deserializing. {}", e.to_string())),
-        };
+    let result = match configuration::deserialize_config(&config_file_text) {
+        Ok(map) => map,
+        Err(e) => return err!("Error deserializing. {}", e.to_string()),
+    };
 
-        Ok(result)
-    } else {
-        Ok(HashMap::new())
-    }
+    Ok(result)
 }
 
-fn resolve_file_paths(config_map: &mut ConfigMap, args: &ArgMatches, environment: &impl Environment) -> Result<Vec<PathBuf>, String> {
+fn resolve_file_paths(config_map: &mut ConfigMap, args: &ArgMatches, environment: &impl Environment) -> Result<Vec<PathBuf>, ErrBox> {
     let mut file_patterns = get_config_file_patterns(config_map)?;
     file_patterns.extend(resolve_file_patterns_from_cli(args.values_of("file patterns")));
     if !args.is_present("allow-node-modules") {
@@ -258,7 +274,7 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &ArgMatches, environment
         }
     }
 
-    fn get_config_file_patterns(config_map: &mut ConfigMap) -> Result<Vec<String>, String> {
+    fn get_config_file_patterns(config_map: &mut ConfigMap) -> Result<Vec<String>, ErrBox> {
         let mut patterns = Vec::new();
         patterns.extend(take_array_from_config_map(config_map, "includes")?);
         patterns.extend(
@@ -267,20 +283,25 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &ArgMatches, environment
                 .map(|exclude| if exclude.starts_with("!") { exclude } else { format!("!{}", exclude) })
         );
         return Ok(patterns);
+    }
+}
 
-        fn take_array_from_config_map(config_map: &mut ConfigMap, property_name: &str) -> Result<Vec<String>, String> {
-            let mut result = Vec::new();
-            if let Some(value) = config_map.remove(property_name) {
-                match value {
-                    ConfigMapValue::Vec(elements) => {
-                        result.extend(elements);
-                    },
-                    _ => return Err(format!("Expected array in '{}' property.", property_name))
-                }
-            }
-            Ok(result)
+fn get_config_map_from_matches(matches: &ArgMatches, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
+    deserialize_config_file(matches.value_of("config"), environment)
+}
+
+// todo: move somewhere else (maybe make a wrapper around ConfigMap)
+fn take_array_from_config_map(config_map: &mut ConfigMap, property_name: &str) -> Result<Vec<String>, ErrBox> {
+    let mut result = Vec::new();
+    if let Some(value) = config_map.remove(property_name) {
+        match value {
+            ConfigMapValue::Vec(elements) => {
+                result.extend(elements);
+            },
+            _ => return err!("Expected array in '{}' property.", property_name),
         }
     }
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -290,69 +311,69 @@ mod tests {
     use super::super::environment::{Environment, TestEnvironment};
     use super::super::configuration::*;
 
-    #[test]
-    fn it_should_output_version() {
+    #[tokio::test]
+    async fn it_should_output_version() {
         let environment = TestEnvironment::new();
-        run_cli(&environment, vec![String::from(""), String::from("--version")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--version")]).await.unwrap();
         let logged_messages = environment.get_logged_messages();
         assert_eq!(logged_messages[0], format!("dprint v{}", env!("CARGO_PKG_VERSION")));
         assert_eq!(logged_messages.len(), 3); // good enough
     }
 
-    #[test]
-    fn it_should_output_resolve_config() {
+    #[tokio::test]
+    async fn it_should_output_resolve_config() {
         let environment = TestEnvironment::new();
-        run_cli(&environment, vec![String::from(""), String::from("--output-resolved-config")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--output-resolved-config")]).await.unwrap();
         let logged_messages = environment.get_logged_messages();
         assert_eq!(logged_messages[0].starts_with("typescript/javascript: {\n"), true); // good enough
         assert_eq!(logged_messages[1].starts_with("json/jsonc: {\n"), true);
         assert_eq!(logged_messages.len(), 2);
     }
 
-    #[test]
-    fn it_should_output_resolved_file_paths() {
+    #[tokio::test]
+    async fn it_should_output_resolved_file_paths() {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("/file.ts"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/file2.ts"), "const t=4;").unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("--output-file-paths"), String::from("**/*.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--output-file-paths"), String::from("**/*.ts")]).await.unwrap();
         let mut logged_messages = environment.get_logged_messages();
         logged_messages.sort();
         assert_eq!(logged_messages, vec!["/file.ts", "/file2.ts"]);
     }
 
-    #[test]
-    fn it_should_format_files() {
+    #[tokio::test]
+    async fn it_should_format_files() {
         let environment = TestEnvironment::new();
         let file_path = PathBuf::from("/file.ts");
         environment.write_file(&file_path, "const t=4;").unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("/file.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("/file.ts")]).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
         assert_eq!(environment.read_file(&file_path).unwrap(), "const t = 4;\n");
     }
 
-    #[test]
-    fn it_should_ignore_files_in_node_modules_by_default() {
+    #[tokio::test]
+    async fn it_should_ignore_files_in_node_modules_by_default() {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("/node_modules/file.ts"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/test/node_modules/file.ts"), "const t=4;").unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("**/*.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("**/*.ts")]).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    #[test]
-    fn it_should_not_ignore_files_in_node_modules_when_allowed() {
+    #[tokio::test]
+    async fn it_should_not_ignore_files_in_node_modules_when_allowed() {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("/node_modules/file.ts"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/test/node_modules/file.ts"), "const t=4;").unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("--allow-node-modules"), String::from("**/*.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--allow-node-modules"), String::from("**/*.ts")]).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec![String::from("Formatted 2 files.")]);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    #[test]
-    fn it_should_format_files_with_config() {
+    #[tokio::test]
+    async fn it_should_format_files_with_config() {
         let environment = TestEnvironment::new();
         let file_path1 = PathBuf::from("/file1.ts");
         let file_path2 = PathBuf::from("/file2.ts");
@@ -361,7 +382,7 @@ mod tests {
         environment.write_file(&file_path2, "log(   55    );").unwrap();
         environment.write_file(&config_file_path, r#"{ "projectType": "openSource", "typescript": { "semiColons": "asi" } }"#).unwrap();
 
-        run_cli(&environment, vec![String::from(""), String::from("--config"), String::from("/config.json"), String::from("/file1.ts"), String::from("/file2.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--config"), String::from("/config.json"), String::from("/file1.ts"), String::from("/file2.ts")]).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -369,23 +390,23 @@ mod tests {
         assert_eq!(environment.read_file(&file_path2).unwrap(), "log(55)\n");
     }
 
-    #[test]
-    fn it_should_format_files_with_config_using_c() {
+    #[tokio::test]
+    async fn it_should_format_files_with_config_using_c() {
         let environment = TestEnvironment::new();
         let file_path1 = PathBuf::from("/file1.ts");
         let config_file_path = PathBuf::from("/config.json");
         environment.write_file(&file_path1, "const t=4;").unwrap();
         environment.write_file(&config_file_path, r#"{ "projectType": "openSource", "typescript": { "semiColons": "asi" } }"#).unwrap();
 
-        run_cli(&environment, vec![String::from(""), String::from("-c"), String::from("/config.json"), String::from("/file1.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("-c"), String::from("/config.json"), String::from("/file1.ts")]).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
         assert_eq!(environment.read_file(&file_path1).unwrap(), "const t = 4\n");
     }
 
-    #[test]
-    fn it_should_format_files_with_config_includes() {
+    #[tokio::test]
+    async fn it_should_format_files_with_config_includes() {
         let environment = TestEnvironment::new();
         let file_path1 = PathBuf::from("/file1.ts");
         let file_path2 = PathBuf::from("/file2.ts");
@@ -398,7 +419,7 @@ mod tests {
             "includes": ["**/*.ts"]
         }"#).unwrap();
 
-        run_cli(&environment, vec![String::from(""), String::from("--config"), String::from("/config.json")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--config"), String::from("/config.json")]).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -406,8 +427,8 @@ mod tests {
         assert_eq!(environment.read_file(&file_path2).unwrap(), "log(55)\n");
     }
 
-    #[test]
-    fn it_should_format_files_with_config_excludes() {
+    #[tokio::test]
+    async fn it_should_format_files_with_config_excludes() {
         let environment = TestEnvironment::new();
         let file_path1 = PathBuf::from("/file1.ts");
         let file_path2 = PathBuf::from("/file2.ts");
@@ -421,7 +442,7 @@ mod tests {
             "excludes": ["/file2.ts"]
         }"#).unwrap();
 
-        run_cli(&environment, vec![String::from(""), String::from("--config"), String::from("/config.json")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--config"), String::from("/config.json")]).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -429,77 +450,77 @@ mod tests {
         assert_eq!(environment.read_file(&file_path2).unwrap(), "log(   55    );");
     }
 
-    #[test]
-    fn it_should_only_warn_when_missing_project_type() {
+    #[tokio::test]
+    async fn it_should_only_warn_when_missing_project_type() {
         let environment = TestEnvironment::new();
         let file_path1 = PathBuf::from("/file1.ts");
         let config_file_path = PathBuf::from("/config.json");
         environment.write_file(&file_path1, "const t=4;").unwrap();
         environment.write_file(&config_file_path, r#"{ "typescript": { "semiColons": "asi" } }"#).unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("-c"), String::from("/config.json"), String::from("/file1.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("-c"), String::from("/config.json"), String::from("/file1.ts")]).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors()[0].find("The 'projectType' property").is_some(), true);
     }
 
-    #[test]
-    fn it_should_not_output_when_no_files_need_formatting() {
+    #[tokio::test]
+    async fn it_should_not_output_when_no_files_need_formatting() {
         let environment = TestEnvironment::new();
         let file_path = PathBuf::from("/file.ts");
         environment.write_file(&file_path, "const t = 4;\n").unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("/file.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("/file.ts")]).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    #[test]
-    fn it_should_not_output_when_no_files_need_formatting_for_check() {
+    #[tokio::test]
+    async fn it_should_not_output_when_no_files_need_formatting_for_check() {
         let environment = TestEnvironment::new();
         let file_path = PathBuf::from("/file.ts");
         environment.write_file(&file_path, "const t = 4;\n").unwrap();
-        run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/file.ts")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/file.ts")]).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    #[test]
-    fn it_should_output_when_a_file_need_formatting_for_check() {
+    #[tokio::test]
+    async fn it_should_output_when_a_file_need_formatting_for_check() {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("/file.ts"), "const t=4;").unwrap();
-        let error_message = run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/file.ts")]).err().unwrap();
-        assert_eq!(error_message, "Found 1 not formatted file.");
+        let error_message = run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/file.ts")]).await.err().unwrap();
+        assert_eq!(error_message.to_string(), "Found 1 not formatted file.");
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    #[test]
-    fn it_should_output_when_files_need_formatting_for_check() {
+    #[tokio::test]
+    async fn it_should_output_when_files_need_formatting_for_check() {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("/file1.ts"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/file2.ts"), "const t=4;").unwrap();
-        let error_message = run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/file1.ts"), String::from("/file2.ts")]).err().unwrap();
-        assert_eq!(error_message, "Found 2 not formatted files.");
+        let error_message = run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/file1.ts"), String::from("/file2.ts")]).await.err().unwrap();
+        assert_eq!(error_message.to_string(), "Found 2 not formatted files.");
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    #[test]
-    fn it_should_initialize() {
+    #[tokio::test]
+    async fn it_should_initialize() {
         let environment = TestEnvironment::new();
-        run_cli(&environment, vec![String::from(""), String::from("--init")]).unwrap();
+        run_cli(&environment, vec![String::from(""), String::from("--init")]).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec!["Created dprint.config.json"]);
         assert_eq!(environment.read_file(&PathBuf::from("./dprint.config.json")).unwrap(), get_init_config_file_text());
         // ensure this file doesn't need formatting
         assert_eq!(
-            run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/dprint.config.json")]).err().is_none(),
+            run_cli(&environment, vec![String::from(""), String::from("--check"), String::from("/dprint.config.json")]).await.err().is_none(),
             true
         );
     }
 
-    #[test]
-    fn it_should_error_when_config_file_exists_on_initialize() {
+    #[tokio::test]
+    async fn it_should_error_when_config_file_exists_on_initialize() {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("./dprint.config.json"), "{}").unwrap();
-        let error_message = run_cli(&environment, vec![String::from(""), String::from("--init")]).err().unwrap();
-        assert_eq!(error_message, "Configuration file 'dprint.config.json' already exists in current working directory.");
+        let error_message = run_cli(&environment, vec![String::from(""), String::from("--init")]).await.err().unwrap();
+        assert_eq!(error_message.to_string(), "Configuration file 'dprint.config.json' already exists in current working directory.");
     }
 }

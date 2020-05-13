@@ -11,7 +11,7 @@ pub struct PluginCache<'a, TEnvironment> where TEnvironment : Environment {
 }
 
 impl<'a, TEnvironment> PluginCache<'a, TEnvironment> where TEnvironment : Environment {
-    pub fn new(environment: &'a TEnvironment) -> Result<Self, String> {
+    pub fn new(environment: &'a TEnvironment) -> Result<Self, ErrBox> {
         let cache_manifest = read_manifest(environment)?;
         Ok(PluginCache {
             environment,
@@ -64,7 +64,7 @@ impl<'a, TEnvironment> PluginCache<'a, TEnvironment> where TEnvironment : Enviro
         self.cache_manifest.urls.iter().position(|u| u.url == url)
     }
 
-    fn save_manifest(&self) -> Result<(), String> {
+    fn save_manifest(&self) -> Result<(), ErrBox> {
         write_manifest(&self.cache_manifest, self.environment)
     }
 }

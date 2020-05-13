@@ -1,23 +1,48 @@
-use dprint_core::plugins::{Formatter, Plugin};
 use std::collections::HashMap;
+use core::slice::{Iter};
+use std::path::PathBuf;
 
 use super::configuration::{ConfigMapValue, ConfigMap};
+use super::plugins::{Plugin, PluginContainer};
 use super::environment::Environment;
 
-pub fn create_formatter(config_map: ConfigMap, environment: &impl Environment) -> Result<Formatter, String> {
-    let mut plugins = Formatter::new(get_uninitialized_plugins());
+/// A formatter constructed from a collection of plugins.
+pub struct Formatter {
+    plugin_container: PluginContainer,
+}
 
-    match initialize_plugins(config_map, &mut plugins, environment) {
-        Ok(()) => Ok(plugins),
-        Err(err) => Err(format!("Error initializing from configuration file. {}", err)),
+impl Formatter {
+    /// Creates a new formatter
+    pub fn new(plugin_container: PluginContainer) -> Formatter {
+        Formatter { plugin_container }
+    }
+
+    /// Iterates over the plugins.
+    pub fn iter_plugins(&self) -> Iter<'_, Box<dyn Plugin>> {
+        self.plugin_container.iter()
+    }
+
+    /// Formats the file text with one of the plugins.
+    ///
+    /// Returns the string when a plugin formatted or error. Otherwise None when no plugin was found.
+    pub fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<Option<String>, String> {
+        for plugin in self.iter_plugins() {
+            if plugin.should_format_file(file_path, file_text) {
+                return plugin.format_text(file_path, file_text).map(|x| Some(x));
+            }
+        }
+
+        Ok(None)
     }
 }
 
-pub fn get_uninitialized_plugins() -> Vec<Box<dyn Plugin>> {
-    vec![
-        Box::new(dprint_plugin_typescript::TypeScriptPlugin::new()),
-        Box::new(dprint_plugin_jsonc::JsoncPlugin::new())
-    ]
+pub fn create_formatter(config_map: ConfigMap, plugins: PluginContainer, environment: &impl Environment) -> Result<Formatter, String> {
+    let mut formatter = Formatter::new(plugins);
+
+    match initialize_plugins(config_map, &mut formatter, environment) {
+        Ok(()) => Ok(formatter),
+        Err(err) => Err(format!("Error initializing from configuration file. {}", err)),
+    }
 }
 
 fn initialize_plugins(config_map: ConfigMap, formatter: &mut Formatter, environment: &impl Environment) -> Result<(), String> {
@@ -40,10 +65,10 @@ fn initialize_plugins(config_map: ConfigMap, formatter: &mut Formatter, environm
     }
 
     // intiailize the plugins
-    for plugin in formatter.iter_plugins_mut() {
+    for plugin in formatter.iter_plugins() {
         plugin.initialize(plugins_to_config.remove(&plugin.name()).unwrap_or(HashMap::new()), &global_config_result.config);
 
-        for diagnostic in plugin.get_configuration_diagnostics() {
+        for diagnostic in plugin.get_config_diagnostics() {
             environment.log_error(&format!("[{}]: {}", plugin.name(), diagnostic.message));
             diagnostic_count += 1;
         }
@@ -59,7 +84,7 @@ fn initialize_plugins(config_map: ConfigMap, formatter: &mut Formatter, environm
 fn handle_plugins_to_config_map(
     formatter: &Formatter,
     config_map: &mut ConfigMap,
-) -> Result<HashMap<&'static str, HashMap<String, String>>, String> {
+) -> Result<HashMap<String, HashMap<String, String>>, String> {
     let mut plugin_maps = HashMap::new();
     for plugin in formatter.iter_plugins() {
         let mut key_name = None;
@@ -192,13 +217,15 @@ mod tests {
 
     fn assert_creates(config_map: ConfigMap) {
         let test_environment = TestEnvironment::new();
-        assert_eq!(create_formatter(config_map, &test_environment).is_ok(), true);
+        assert_eq!(true, false); // fail... implement the below
+        //assert_eq!(create_formatter(config_map, &test_environment).is_ok(), true);
     }
 
     fn assert_errors(config_map: ConfigMap, logged_errors: Vec<&'static str>, message: &str) {
         let test_environment = TestEnvironment::new();
-        let result = create_formatter(config_map, &test_environment);
+        assert_eq!(true, false); // fail... implement the below
+        /*let result = create_formatter(config_map, &test_environment);
         assert_eq!(result.err().unwrap(), message);
-        assert_eq!(test_environment.get_logged_errors(), logged_errors);
+        assert_eq!(test_environment.get_logged_errors(), logged_errors);*/
     }
 }

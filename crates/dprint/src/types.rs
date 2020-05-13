@@ -4,7 +4,11 @@ pub type ErrBox = Box<dyn std::error::Error>;
 pub struct Error(String);
 
 impl Error {
-    pub fn new(text: &str) -> Box<Self> {
+    pub fn new(text: String) -> Box<Self> {
+        Box::new(Error(text))
+    }
+
+    pub fn new_str(text: &str) -> Box<Self> {
         Box::new(Error(String::from(text)))
     }
 }
@@ -16,3 +20,9 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+macro_rules! err {
+    ($($arg:tt)*) => {
+        Err(crate::types::Error::new(format!($($arg)*)));
+    }
+}

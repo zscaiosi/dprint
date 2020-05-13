@@ -58,7 +58,7 @@ generate_str_to_from![
 ];
 
 /// Represents a problem within the configuration.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationDiagnostic {
     /// The property name the problem occurred on.
