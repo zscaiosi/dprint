@@ -1,26 +1,32 @@
+use std::cell::RefCell;
 use dprint_core::configuration::{ConfigurationDiagnostic, GlobalConfiguration};
 use dprint_core::plugins::PluginInfo;
-use wasmer_runtime::{Instance};
+use bytes::Bytes;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use super::super::super::types::ErrBox;
-use super::{BytesTransmitter, WasmFunctions, FormatResult};
+use super::super::Plugin;
+use super::{BytesTransmitter, WasmFunctions, FormatResult, load};
 
-pub struct WasmPlugin<'a> {
-    wasm_functions: Rc<WasmFunctions<'a>>,
-    bytes_transmitter: BytesTransmitter<'a>,
+pub struct WasmPlugin {
+    wasm_functions: Rc<WasmFunctions>,
+    bytes_transmitter: BytesTransmitter,
+    cached_plugin_info: RefCell<Option<PluginInfo>>,
 }
 
-impl<'a> WasmPlugin<'a> {
-    pub fn new(instance: &'a Instance) -> Result<Self, ErrBox> {
-        let wasm_functions = Rc::new(WasmFunctions::new(&instance)?);
+impl WasmPlugin {
+    pub fn new(compiled_wasm_bytes: Bytes) -> Result<Self, ErrBox> {
+        // todo: implement a wasm instance pool
+        let instance = load(&compiled_wasm_bytes)?;
+        let wasm_functions = Rc::new(WasmFunctions::new(instance)?);
         let bytes_transmitter = BytesTransmitter::new(wasm_functions.clone());
 
         Ok(WasmPlugin {
             wasm_functions,
             bytes_transmitter,
+            cached_plugin_info: RefCell::new(None),
         })
     }
 
@@ -48,9 +54,15 @@ impl<'a> WasmPlugin<'a> {
     }
 
     pub fn get_plugin_info(&self) -> PluginInfo {
-        let len = self.wasm_functions.get_plugin_info();
-        let json_text = self.bytes_transmitter.receive_string(len);
-        serde_json::from_str(&json_text).unwrap()
+        if self.cached_plugin_info.borrow().is_none() {
+            let len = self.wasm_functions.get_plugin_info();
+            let json_text = self.bytes_transmitter.receive_string(len);
+            let plugin_info = serde_json::from_str(&json_text).unwrap();
+            self.cached_plugin_info.borrow_mut().replace(plugin_info);
+        }
+
+        // todo: avoid cloning
+        self.cached_plugin_info.borrow().as_ref().unwrap().clone()
     }
 
     pub fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<String, String> {
@@ -74,5 +86,45 @@ impl<'a> WasmPlugin<'a> {
                 Err(self.bytes_transmitter.receive_string(len))
             }
         }
+    }
+}
+
+impl Plugin for WasmPlugin {
+    fn name(&self) -> String {
+        self.get_plugin_info().name
+    }
+
+    fn version(&self) -> String {
+        self.get_plugin_info().version
+    }
+
+    fn config_keys(&self) -> Vec<String> {
+        self.get_plugin_info().config_keys
+    }
+
+    fn initialize(&self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) {
+        self.set_global_config(global_config);
+        self.set_plugin_config(&plugin_config);
+    }
+
+    fn should_format_file(&self, file_path: &PathBuf, _: &str) -> bool {
+        if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+            let ext = String::from(ext).to_lowercase();
+            self.get_plugin_info().config_keys.contains(&ext)
+        } else {
+            false
+        }
+
+    }
+    fn get_resolved_config(&self) -> String {
+        self.get_resolved_config()
+    }
+
+    fn get_config_diagnostics(&self) -> Vec<ConfigurationDiagnostic> {
+        self.get_config_diagnostics()
+    }
+
+    fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<String, String> {
+        self.format_text(file_path, file_text)
     }
 }

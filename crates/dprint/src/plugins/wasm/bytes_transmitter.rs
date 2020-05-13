@@ -1,13 +1,13 @@
 use std::rc::Rc;
 use super::WasmFunctions;
 
-pub struct BytesTransmitter<'a> {
-    wasm_functions: Rc<WasmFunctions<'a>>,
+pub struct BytesTransmitter {
+    wasm_functions: Rc<WasmFunctions>,
     buffer_size: usize,
 }
 
-impl<'a> BytesTransmitter<'a> {
-    pub fn new(wasm_functions: Rc<WasmFunctions<'a>>) -> Self {
+impl<'a> BytesTransmitter {
+    pub fn new(wasm_functions: Rc<WasmFunctions>) -> Self {
         let buffer_size = wasm_functions.get_wasm_memory_buffer_size();
         BytesTransmitter {
             wasm_functions,
