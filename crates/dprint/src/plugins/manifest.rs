@@ -6,20 +6,19 @@ use super::super::types::ErrBox;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CacheManifest {
-    pub count: u32,
     pub urls: Vec<UrlCacheEntry>
 }
 
 impl CacheManifest {
     pub(super) fn new() -> CacheManifest {
-        CacheManifest { count: 0, urls: vec![] }
+        CacheManifest { urls: vec![] }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct UrlCacheEntry {
     pub url: String,
-    pub file_path: String,
+    pub file_name: String,
 }
 
 pub fn read_manifest(environment: &impl Environment) -> Result<CacheManifest, ErrBox> {
@@ -50,7 +49,7 @@ pub fn write_manifest(manifest: &CacheManifest, environment: &impl Environment) 
 }
 
 fn get_manifest_file_path(environment: &impl Environment) -> Result<PathBuf, ErrBox> {
-    let app_dir = environment.get_user_app_dir()?;
+    let app_dir = environment.get_cache_dir()?;
     Ok(app_dir.join("cache-manifest.json"))
 }
 
@@ -63,15 +62,14 @@ mod test {
     fn it_should_read_ok_manifest() {
         let environment = TestEnvironment::new();
         environment.write_file(
-            &environment.get_user_app_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "count": 0, "urls": [{ "url": "a", "file_path": "b" }] }"#
+            &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
+            r#"{ "urls": [{ "url": "a", "file_name": "b" }] }"#
         ).unwrap();
 
         assert_eq!(read_manifest(&environment).unwrap(), CacheManifest {
-            count: 0,
             urls: vec![UrlCacheEntry {
                 url: String::from("a"),
-                file_path: String::from("b"),
+                file_name: String::from("b"),
             }]
         })
     }
@@ -80,13 +78,13 @@ mod test {
     fn it_should_have_empty_manifest_for_deserialization_error() {
         let environment = TestEnvironment::new();
         environment.write_file(
-            &environment.get_user_app_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "count": 0, "urls": [{ "url": "a", file_path: "b" }] }"#
+            &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
+            r#"{ "urls": [{ "url": "a", file_name: "b" }] }"#
         ).unwrap();
 
         assert_eq!(read_manifest(&environment).unwrap(), CacheManifest::new());
         assert_eq!(environment.get_logged_errors(), vec![
-            String::from("Error deserializing cache manifest, but ignoring: key must be a string at line 1 column 38")
+            String::from("Error deserializing cache manifest, but ignoring: key must be a string at line 1 column 26")
         ]);
     }
 
@@ -102,22 +100,21 @@ mod test {
     fn it_save_manifest() {
         let environment = TestEnvironment::new();
         let manifest = CacheManifest {
-            count: 2,
             urls: vec![
                 UrlCacheEntry {
                     url: String::from("a"),
-                    file_path: String::from("b"),
+                    file_name: String::from("b"),
                 },
                 UrlCacheEntry {
                     url: String::from("c"),
-                    file_path: String::from("d"),
+                    file_name: String::from("d"),
                 },
             ]
         };
         write_manifest(&manifest, &environment).unwrap();
         assert_eq!(
-            environment.read_file(&environment.get_user_app_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"count":2,"urls":[{"url":"a","file_path":"b"},{"url":"c","file_path":"d"}]}"#
+            environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
+            r#"{urls":[{"url":"a","file_name":"b"},{"url":"c","file_name":"d"}]}"#
         );
     }
 }

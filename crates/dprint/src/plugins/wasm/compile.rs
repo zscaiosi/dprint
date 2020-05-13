@@ -1,4 +1,4 @@
-use super::super::super::types::{ErrBox, Error};
+use super::super::super::types::ErrBox;
 
 /// Compiles a WASM module.
 pub fn compile(wasm_bytes: &[u8]) -> Result<Vec<u8>, ErrBox> {

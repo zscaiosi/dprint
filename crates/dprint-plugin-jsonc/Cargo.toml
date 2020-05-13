@@ -9,6 +9,9 @@ edition = "2018"
 homepage = "https://github.com/dprint/dprint/tree/master/crates/dprint-plugin-jsonc"
 repository = "https://github.com/dprint/dprint"
 
+[lib]
+crate-type = ["lib", "cdylib"]
+
 [dependencies]
 dprint-core = { path = "../core", version = "0.19.1" }
 jsonc-parser = { version = "0.5.0" }

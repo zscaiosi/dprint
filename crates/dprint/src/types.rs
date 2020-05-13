@@ -7,10 +7,6 @@ impl Error {
     pub fn new(text: String) -> Box<Self> {
         Box::new(Error(text))
     }
-
-    pub fn new_str(text: &str) -> Box<Self> {
-        Box::new(Error(String::from(text)))
-    }
 }
 
 impl std::fmt::Display for Error {

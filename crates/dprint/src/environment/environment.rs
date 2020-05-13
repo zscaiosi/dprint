@@ -15,6 +15,5 @@ pub trait Environment : std::marker::Sync {
     fn log(&self, text: &str);
     fn log_error(&self, text: &str);
     async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox>;
-    fn get_user_app_dir(&self) -> Result<PathBuf, ErrBox>;
-    fn get_plugin_cache_dir(&self) -> Result<PathBuf, ErrBox>;
+    fn get_cache_dir(&self) -> Result<PathBuf, ErrBox>;
 }

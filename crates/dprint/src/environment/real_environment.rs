@@ -110,17 +110,10 @@ impl Environment for RealEnvironment {
         eprintln!("{}", text);
     }
 
-    fn get_user_app_dir(&self) -> Result<PathBuf, ErrBox> {
-        match app_dirs::app_root(app_dirs::AppDataType::UserConfig, &APP_INFO) {
+    fn get_cache_dir(&self) -> Result<PathBuf, ErrBox> {
+        match app_dirs::app_dir(app_dirs::AppDataType::UserCache, &APP_INFO, "cache") {
             Ok(path) => Ok(path),
-            Err(err) => err!("Error getting app directory: {:?}", err),
-        }
-    }
-
-    fn get_plugin_cache_dir(&self) -> Result<PathBuf, ErrBox> {
-        match app_dirs::app_dir(app_dirs::AppDataType::UserCache, &APP_INFO, "cache/plugins") {
-            Ok(path) => Ok(path),
-            Err(err) => err!("Error getting app directory: {:?}", err),
+            Err(err) => err!("Error getting cache directory: {:?}", err),
         }
     }
 }

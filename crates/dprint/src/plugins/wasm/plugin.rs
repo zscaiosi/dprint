@@ -110,7 +110,7 @@ impl Plugin for WasmPlugin {
     fn should_format_file(&self, file_path: &PathBuf, _: &str) -> bool {
         if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
             let ext = String::from(ext).to_lowercase();
-            self.get_plugin_info().config_keys.contains(&ext)
+            self.get_plugin_info().file_extensions.contains(&ext)
         } else {
             false
         }

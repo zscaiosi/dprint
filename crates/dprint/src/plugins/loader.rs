@@ -1,19 +1,20 @@
 use super::super::environment::Environment;
-use super::super::types::{ErrBox, Error};
-use super::PluginCache;
+use super::super::types::ErrBox;
+use super::Cache;
 use super::wasm::{WasmPlugin};
 use super::Plugin;
 
 pub type PluginContainer = Vec<Box<dyn Plugin>>;
 
 pub async fn load_plugins(urls: Vec<String>, environment: &impl Environment) -> Result<PluginContainer, ErrBox> {
-    let mut cache = PluginCache::new(environment)?;
+    let mut cache = Cache::new(environment)?;
     let mut plugin_container = Vec::new();
 
     for url in urls.iter() {
         let plugin = match load_plugin(url, &mut cache, environment).await {
             Ok(plugin) => plugin,
             Err(err) => {
+                cache.forget_url(url)?;
                 return err!("Error loading plugin at url {}: {}", url, err);
             }
         };
@@ -25,11 +26,23 @@ pub async fn load_plugins(urls: Vec<String>, environment: &impl Environment) -> 
 
 async fn load_plugin<'a, TEnvironment : Environment>(
     url: &str,
-    cache: &mut PluginCache<'a, TEnvironment>,
+    cache: &mut Cache<'a, TEnvironment>,
     environment: &TEnvironment,
 ) -> Result<Box<dyn Plugin>, ErrBox> {
     let file_path = cache.get_plugin_file_path(url).await?;
-    let file_bytes = environment.read_file_bytes(&file_path)?;
+    let file_bytes = match environment.read_file_bytes(&file_path) {
+        Ok(file_bytes) => file_bytes,
+        Err(err) => {
+            environment.log_error(&format!(
+                "Error reading plugin file bytes. Forgetting from cache and attempting redownload. Message: {:?}",
+                err
+            ));
+
+            cache.forget_url(url)?;
+            let file_path = cache.get_plugin_file_path(url).await?;
+            environment.read_file_bytes(&file_path)?
+        }
+    };
     let plugin = WasmPlugin::new(file_bytes)?;
 
     Ok(Box::new(plugin))

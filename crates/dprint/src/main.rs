@@ -15,11 +15,11 @@ async fn main() -> Result<(), types::ErrBox> {
     let args = std::env::args().collect();
 
     match run_cli::run_cli(&environment, args).await {
-        _ => Ok(()),
         Err(err) => {
             environment.log_error(&format!("{:?}", err));
             std::process::exit(1);
         },
+        _ => Ok(()),
     }
 }
 

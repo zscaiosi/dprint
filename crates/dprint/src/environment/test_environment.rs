@@ -107,11 +107,7 @@ impl Environment for TestEnvironment {
         self.logged_errors.lock().unwrap().push(String::from(text));
     }
 
-    fn get_user_app_dir(&self) -> Result<PathBuf, ErrBox> {
-        Ok(PathBuf::from("/user"))
-    }
-
-    fn get_plugin_cache_dir(&self) -> Result<PathBuf, ErrBox> {
+    fn get_cache_dir(&self) -> Result<PathBuf, ErrBox> {
         Ok(PathBuf::from("/cache"))
     }
 }
