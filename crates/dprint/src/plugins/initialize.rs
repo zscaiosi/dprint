@@ -1,10 +1,18 @@
 use std::collections::HashMap;
 
 use crate::environment::Environment;
-use crate::plugins::loader::PluginContainer;
 use crate::configuration::{ConfigMap, ConfigMapValue};
+use crate::types::ErrBox;
+use super::PluginContainer;
 
-pub fn initialize_plugins(config_map: ConfigMap, plugins: &PluginContainer, environment: &impl Environment) -> Result<(), String> {
+pub fn initialize_plugins(config_map: ConfigMap, plugins: &PluginContainer, environment: &impl Environment) -> Result<(), ErrBox> {
+    match inner_initialize(config_map, &plugins, environment) {
+        Ok(()) => Ok(()),
+        Err(err) => err!("Error initializing from configuration file. {}", err)
+    }
+}
+
+fn inner_initialize(config_map: ConfigMap, plugins: &PluginContainer, environment: &impl Environment) -> Result<(), String> {
     let mut config_map = config_map;
 
     // get hashmaps per plugin
@@ -38,6 +46,7 @@ pub fn initialize_plugins(config_map: ConfigMap, plugins: &PluginContainer, envi
     } else {
         Ok(())
     }
+
 }
 
 fn handle_plugins_to_config_map(
@@ -88,11 +97,12 @@ fn get_global_config_from_config_map(config_map: ConfigMap) -> Result<HashMap<St
 mod tests {
     use std::collections::HashMap;
     use super::*;
+    use super::super::{PluginContainer, TestPlugin, Plugin};
     use crate::environment::{TestEnvironment};
     use crate::configuration::{ConfigMapValue, ConfigMap};
 
     #[test]
-    fn it_should_get_formatter() {
+    fn it_should_initialize_plugins() {
         let mut config_map = HashMap::new();
         config_map.insert(String::from("lineWidth"), ConfigMapValue::String(String::from("80")));
         config_map.insert(String::from("typescript"), {
@@ -120,7 +130,8 @@ mod tests {
         assert_errors(
             config_map,
             vec![],
-            "Error initializing from configuration file. Cannot specify both the 'typescript' and 'javascript' configurations for dprint-plugin-typescript."
+            "Error initializing from configuration file. Cannot specify both the 'typescript' and 'javascript' configurations for dprint-plugin-typescript.",
+            vec![create_plugin()],
         );
     }
 
@@ -132,7 +143,8 @@ mod tests {
         assert_errors(
             config_map,
             vec![],
-            "Error initializing from configuration file. Expected the configuration property 'typescript' to be an object."
+            "Error initializing from configuration file. Expected the configuration property 'typescript' to be an object.",
+            vec![create_plugin()],
         );
     }
 
@@ -143,7 +155,8 @@ mod tests {
         assert_errors(
             config_map,
             vec!["Error parsing configuration value for 'lineWidth'. Message: invalid digit found in string"],
-            "Error initializing from configuration file. Had 1 diagnostic(s)."
+            "Error initializing from configuration file. Had 1 diagnostic(s).",
+            vec![create_plugin()],
         );
     }
 
@@ -155,7 +168,8 @@ mod tests {
         assert_errors(
             config_map,
             vec![],
-            "Error initializing from configuration file. Unexpected object property 'test'."
+            "Error initializing from configuration file. Unexpected object property 'test'.",
+            vec![create_plugin()],
         );
     }
 
@@ -167,24 +181,39 @@ mod tests {
             map.insert(String::from("lineWidth"), String::from("null"));
             ConfigMapValue::HashMap(map)
         });
+        let mut plugin = create_plugin();
+        plugin.set_diagnostics(vec![("lineWidth", "Invalid digit found in string")]);
         assert_errors(
             config_map,
-            vec!["[dprint-plugin-typescript]: Error parsing configuration value for 'lineWidth'. Message: invalid digit found in string"],
-            "Error initializing from configuration file. Had 1 diagnostic(s)."
+            vec!["[dprint-plugin-typescript]: Invalid digit found in string"],
+            "Error initializing from configuration file. Had 1 diagnostic(s).",
+            vec![plugin],
         );
     }
 
     fn assert_creates(config_map: ConfigMap) {
         let test_environment = TestEnvironment::new();
-        assert_eq!(true, false); // fail... implement the below
-        //assert_eq!(create_formatter(config_map, &test_environment).is_ok(), true);
+        let plugin_container = create_plugin_container(vec![create_plugin()]);
+        assert_eq!(initialize_plugins(config_map, &plugin_container, &test_environment).is_ok(), true);
     }
 
-    fn assert_errors(config_map: ConfigMap, logged_errors: Vec<&'static str>, message: &str) {
+    fn assert_errors(config_map: ConfigMap, logged_errors: Vec<&'static str>, message: &str, plugins: Vec<TestPlugin>) {
         let test_environment = TestEnvironment::new();
-        assert_eq!(true, false); // fail... implement the below
-        /*let result = create_formatter(config_map, &test_environment);
-        assert_eq!(result.err().unwrap(), message);
-        assert_eq!(test_environment.get_logged_errors(), logged_errors);*/
+        let plugin_container = create_plugin_container(plugins);
+        let result = initialize_plugins(config_map, &plugin_container, &test_environment);
+        assert_eq!(result.err().unwrap().to_string(), message);
+        assert_eq!(test_environment.get_logged_errors(), logged_errors);
+    }
+
+    fn create_plugin_container(plugins: Vec<TestPlugin>) -> PluginContainer {
+        PluginContainer::new(plugins.into_iter().map(|plugin| Box::new(plugin) as Box<dyn Plugin>).collect())
+    }
+
+    fn create_plugin() -> TestPlugin {
+        TestPlugin::new(
+            "dprint-plugin-typescript",
+            vec!["typescript", "javascript"],
+            vec![".ts"]
+        )
     }
 }

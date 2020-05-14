@@ -1,8 +1,8 @@
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 
-use super::super::environment::Environment;
-use super::super::types::ErrBox;
+use crate::environment::Environment;
+use crate::types::ErrBox;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CacheManifest {
@@ -49,14 +49,14 @@ pub fn write_manifest(manifest: &CacheManifest, environment: &impl Environment) 
 }
 
 fn get_manifest_file_path(environment: &impl Environment) -> Result<PathBuf, ErrBox> {
-    let app_dir = environment.get_cache_dir()?;
-    Ok(app_dir.join("cache-manifest.json"))
+    let cache_dir = environment.get_cache_dir()?;
+    Ok(cache_dir.join("cache-manifest.json"))
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use super::super::super::environment::TestEnvironment;
+    use crate::environment::TestEnvironment;
 
     #[test]
     fn it_should_read_ok_manifest() {
@@ -114,7 +114,7 @@ mod test {
         write_manifest(&manifest, &environment).unwrap();
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{urls":[{"url":"a","file_name":"b"},{"url":"c","file_name":"d"}]}"#
+            r#"{"urls":[{"url":"a","file_name":"b"},{"url":"c","file_name":"d"}]}"#
         );
     }
 }

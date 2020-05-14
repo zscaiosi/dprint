@@ -33,10 +33,7 @@ pub async fn run_cli(environment: &impl Environment, args: Vec<String>) -> Resul
     }
 
     let plugins = load_plugins(&mut config_map, environment).await?;
-    match initialize_plugins(config_map, &plugins, environment) {
-        Ok(()) => {},
-        Err(err) => return err!("Error initializing from configuration file. {}", err),
-    };
+    initialize_plugins(config_map, &plugins, environment)?;
 
     if matches.is_present("output-resolved-config") {
         output_resolved_config(&plugins, environment);

@@ -1,36 +1,11 @@
-use std::path::PathBuf;
-use core::slice::{Iter};
-
-use super::super::environment::Environment;
-use super::super::types::ErrBox;
-use super::Cache;
-use super::wasm::{WasmPlugin};
-use super::Plugin;
-
-pub struct PluginContainer(Vec<Box<dyn Plugin>>);
-
-impl PluginContainer {
-    /// Iterates over the plugins.
-    pub fn iter(&self) -> Iter<'_, Box<dyn Plugin>> {
-        self.0.iter()
-    }
-
-    /// Formats the file text with one of the plugins.
-    ///
-    /// Returns the string when a plugin formatted or error. Otherwise None when no plugin was found.
-    pub fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<Option<String>, String> {
-        for plugin in self.iter() {
-            if plugin.should_format_file(file_path, file_text) {
-                return plugin.format_text(file_path, file_text).map(|x| Some(x));
-            }
-        }
-
-        Ok(None)
-    }
-}
+use crate::environment::Environment;
+use crate::types::ErrBox;
+use super::cache::Cache;
+use super::wasm::{WasmPlugin, compile};
+use super::{Plugin, PluginContainer, CompileFn};
 
 pub async fn load_plugins(urls: Vec<String>, environment: &impl Environment) -> Result<PluginContainer, ErrBox> {
-    let mut cache = Cache::new(environment)?;
+    let mut cache = Cache::new(environment, compile)?;
     let mut plugin_container = Vec::new();
 
     for url in urls.iter() {
@@ -44,12 +19,12 @@ pub async fn load_plugins(urls: Vec<String>, environment: &impl Environment) -> 
         plugin_container.push(plugin);
     }
 
-    Ok(PluginContainer(plugin_container))
+    Ok(PluginContainer::new(plugin_container))
 }
 
-async fn load_plugin<'a, TEnvironment : Environment>(
+async fn load_plugin<'a, TEnvironment : Environment, TCompileFn : CompileFn>(
     url: &str,
-    cache: &mut Cache<'a, TEnvironment>,
+    cache: &mut Cache<'a, TEnvironment, TCompileFn>,
     environment: &TEnvironment,
 ) -> Result<Box<dyn Plugin>, ErrBox> {
     let file_path = cache.get_plugin_file_path(url).await?;
