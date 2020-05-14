@@ -1,7 +1,7 @@
 pub use super::super::super::types::{ErrBox, Error};
 
 /// Loads a compile wasm module from the specified bytes.
-pub fn load(compiled_module_bytes: &[u8]) -> Result<wasmer_runtime::Instance, ErrBox> {
+pub fn load_instance(compiled_module_bytes: &[u8]) -> Result<wasmer_runtime::Instance, ErrBox> {
     let artifact = match wasmer_runtime::cache::Artifact::deserialize(&compiled_module_bytes) {
         Ok(artifact) => artifact,
         Err(err) => { return err!("Error deserializing compiled wasm module: {:?}", err); }

@@ -61,7 +61,7 @@ impl Environment for RealEnvironment {
         };
 
         // todo: support multiple progress bars downloading many files at the same time
-        self.log(&format!("Downloading: {}", url));
+        self.log(&format!("Downloading {}", url));
         // https://github.com/mitsuhiko/indicatif/blob/master/examples/download.rs
         let pb = ProgressBar::new(total_size.unwrap_or(0));
         pb.set_style(ProgressStyle::default_bar()

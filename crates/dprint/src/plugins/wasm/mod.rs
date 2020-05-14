@@ -1,11 +1,14 @@
 mod bytes_transmitter;
 mod compile;
 mod functions;
-mod load;
+mod load_instance;
+mod wasm_plugin_loader;
 mod plugin;
 
 use bytes_transmitter::*;
-pub use compile::*;
+use compile::*;
 use functions::*;
-pub use load::*;
-pub use plugin::*;
+use load_instance::*;
+use plugin::*;
+
+pub use wasm_plugin_loader::WasmPluginLoader;

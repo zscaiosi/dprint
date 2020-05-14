@@ -1,8 +1,8 @@
 pub mod cache;
+pub mod wasm;
 mod container;
 mod initialize;
 mod loader;
-pub mod wasm;
 mod plugin;
 mod types;
 
