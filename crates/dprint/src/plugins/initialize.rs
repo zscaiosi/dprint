@@ -1,55 +1,14 @@
 use std::collections::HashMap;
-use core::slice::{Iter};
-use std::path::PathBuf;
 
-use super::configuration::{ConfigMapValue, ConfigMap};
-use super::plugins::{Plugin, PluginContainer};
-use super::environment::Environment;
+use crate::environment::Environment;
+use crate::plugins::loader::PluginContainer;
+use crate::configuration::{ConfigMap, ConfigMapValue};
 
-/// A formatter constructed from a collection of plugins.
-pub struct Formatter {
-    plugin_container: PluginContainer,
-}
-
-impl Formatter {
-    /// Creates a new formatter
-    pub fn new(plugin_container: PluginContainer) -> Formatter {
-        Formatter { plugin_container }
-    }
-
-    /// Iterates over the plugins.
-    pub fn iter_plugins(&self) -> Iter<'_, Box<dyn Plugin>> {
-        self.plugin_container.iter()
-    }
-
-    /// Formats the file text with one of the plugins.
-    ///
-    /// Returns the string when a plugin formatted or error. Otherwise None when no plugin was found.
-    pub fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<Option<String>, String> {
-        for plugin in self.iter_plugins() {
-            if plugin.should_format_file(file_path, file_text) {
-                return plugin.format_text(file_path, file_text).map(|x| Some(x));
-            }
-        }
-
-        Ok(None)
-    }
-}
-
-pub fn create_formatter(config_map: ConfigMap, plugins: PluginContainer, environment: &impl Environment) -> Result<Formatter, String> {
-    let mut formatter = Formatter::new(plugins);
-
-    match initialize_plugins(config_map, &mut formatter, environment) {
-        Ok(()) => Ok(formatter),
-        Err(err) => Err(format!("Error initializing from configuration file. {}", err)),
-    }
-}
-
-fn initialize_plugins(config_map: ConfigMap, formatter: &mut Formatter, environment: &impl Environment) -> Result<(), String> {
+pub fn initialize_plugins(config_map: ConfigMap, plugins: &PluginContainer, environment: &impl Environment) -> Result<(), String> {
     let mut config_map = config_map;
 
     // get hashmaps per plugin
-    let mut plugins_to_config = handle_plugins_to_config_map(&formatter, &mut config_map)?;
+    let mut plugins_to_config = handle_plugins_to_config_map(&plugins, &mut config_map)?;
 
     // now get and resolve the global config
     let global_config = get_global_config_from_config_map(config_map)?;
@@ -65,7 +24,7 @@ fn initialize_plugins(config_map: ConfigMap, formatter: &mut Formatter, environm
     }
 
     // intiailize the plugins
-    for plugin in formatter.iter_plugins() {
+    for plugin in plugins.iter() {
         plugin.initialize(plugins_to_config.remove(&plugin.name()).unwrap_or(HashMap::new()), &global_config_result.config);
 
         for diagnostic in plugin.get_config_diagnostics() {
@@ -82,11 +41,11 @@ fn initialize_plugins(config_map: ConfigMap, formatter: &mut Formatter, environm
 }
 
 fn handle_plugins_to_config_map(
-    formatter: &Formatter,
+    plugins: &PluginContainer,
     config_map: &mut ConfigMap,
 ) -> Result<HashMap<String, HashMap<String, String>>, String> {
     let mut plugin_maps = HashMap::new();
-    for plugin in formatter.iter_plugins() {
+    for plugin in plugins.iter() {
         let mut key_name = None;
         let config_keys = plugin.config_keys();
         for config_key in config_keys {
@@ -128,9 +87,9 @@ fn get_global_config_from_config_map(config_map: ConfigMap) -> Result<HashMap<St
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use super::create_formatter;
-    use super::super::environment::{TestEnvironment};
-    use super::super::configuration::{ConfigMapValue, ConfigMap};
+    use super::*;
+    use crate::environment::{TestEnvironment};
+    use crate::configuration::{ConfigMapValue, ConfigMap};
 
     #[test]
     fn it_should_get_formatter() {

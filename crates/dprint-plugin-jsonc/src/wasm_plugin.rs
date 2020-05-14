@@ -11,7 +11,7 @@ fn get_plugin_file_extensions() -> Vec<String> {
 }
 
 fn format_text(_: &PathBuf, file_text: &str, config: &Configuration) -> Result<String, String> {
-    super::format_text::format_text(file_text, config)
+    super::format_text(file_text, config)
 }
 
-generate_plugin_code!(Configuration, resolve_config);
+generate_plugin_code!();

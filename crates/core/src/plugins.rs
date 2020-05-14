@@ -22,7 +22,7 @@ pub const PLUGIN_SYSTEM_SCHEMA_VERSION: u32 = 1;
 pub mod macros {
     #[macro_export]
     macro_rules! generate_plugin_code {
-        ($Configuration:ident, $resolve_config:ident) => {
+        () => {
             // FORMATTING
 
             static mut FILE_PATH: Option<PathBuf> = None;
@@ -72,7 +72,7 @@ pub mod macros {
 
             // CONFIGURATION
 
-            static mut RESOLVE_CONFIGURATION_RESULT: Option<dprint_core::configuration::ResolveConfigurationResult<$Configuration>> = None;
+            static mut RESOLVE_CONFIGURATION_RESULT: Option<dprint_core::configuration::ResolveConfigurationResult<Configuration>> = None;
 
             #[no_mangle]
             pub fn get_plugin_info() -> usize {
@@ -98,7 +98,7 @@ pub mod macros {
                 set_shared_bytes_str(json)
             }
 
-            fn get_resolved_config_result<'a>() -> &'a dprint_core::configuration::ResolveConfigurationResult<$Configuration> {
+            fn get_resolved_config_result<'a>() -> &'a dprint_core::configuration::ResolveConfigurationResult<Configuration> {
                 unsafe {
                     ensure_initialized();
                     return RESOLVE_CONFIGURATION_RESULT.as_ref().unwrap();
@@ -110,7 +110,7 @@ pub mod macros {
                     if RESOLVE_CONFIGURATION_RESULT.is_none() {
                         if let Some(global_config) = GLOBAL_CONFIG.take() {
                             if let Some(plugin_config) = PLUGIN_CONFIG.take() {
-                                let config_result = $resolve_config(plugin_config, &global_config);
+                                let config_result = resolve_config(plugin_config, &global_config);
                                 RESOLVE_CONFIGURATION_RESULT.replace(config_result);
                                 return;
                             }

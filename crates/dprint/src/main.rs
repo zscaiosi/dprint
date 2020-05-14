@@ -4,7 +4,6 @@ use environment::{Environment, RealEnvironment};
 mod types;
 
 mod configuration;
-mod create_formatter;
 mod environment;
 mod run_cli;
 mod plugins;

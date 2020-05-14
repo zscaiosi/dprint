@@ -4,8 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use super::environment::Environment;
 use super::configuration;
 use super::configuration::{ConfigMap, ConfigMapValue};
-use super::create_formatter::{create_formatter, Formatter};
-use super::plugins::{PluginContainer};
+use super::plugins::{initialize_plugins, PluginContainer};
 use super::types::ErrBox;
 
 pub async fn run_cli(environment: &impl Environment, args: Vec<String>) -> Result<(), ErrBox> {
@@ -34,17 +33,20 @@ pub async fn run_cli(environment: &impl Environment, args: Vec<String>) -> Resul
     }
 
     let plugins = load_plugins(&mut config_map, environment).await?;
-    let formatter = create_formatter(config_map, plugins, environment)?;
+    match initialize_plugins(config_map, &plugins, environment) {
+        Ok(()) => {},
+        Err(err) => return err!("Error initializing from configuration file. {}", err),
+    };
 
     if matches.is_present("output-resolved-config") {
-        output_resolved_config(&formatter, environment);
+        output_resolved_config(&plugins, environment);
         return Ok(());
     }
 
     if matches.is_present("check") {
-        check_files(environment, formatter, file_paths)?
+        check_files(environment, plugins, file_paths)?
     } else {
-        format_files(environment, formatter, file_paths);
+        format_files(environment, plugins, file_paths);
     }
 
     Ok(())
@@ -79,8 +81,8 @@ fn output_file_paths<'a>(file_paths: impl Iterator<Item=&'a PathBuf>, environmen
     }
 }
 
-fn output_resolved_config(formatter: &Formatter, environment: &impl Environment) {
-    for plugin in formatter.iter_plugins() {
+fn output_resolved_config(plugins: &PluginContainer, environment: &impl Environment) {
+    for plugin in plugins.iter() {
         environment.log(&format!("{}: {}", plugin.config_keys().join("/"), plugin.get_resolved_config()));
     }
 }
@@ -94,7 +96,7 @@ fn init_config_file(environment: &impl Environment) -> Result<(), ErrBox> {
     }
 }
 
-fn check_files(environment: &impl Environment, formatter: Formatter, file_paths: Vec<PathBuf>) -> Result<(), String> {
+fn check_files(environment: &impl Environment, plugins: PluginContainer, file_paths: Vec<PathBuf>) -> Result<(), String> {
     let not_formatted_files_count = AtomicUsize::new(0);
 
     // todo: parallelize
@@ -102,7 +104,7 @@ fn check_files(environment: &impl Environment, formatter: Formatter, file_paths:
         let file_contents = environment.read_file(&file_path);
         match file_contents {
             Ok(file_contents) => {
-                match formatter.format_text(&file_path, &file_contents) {
+                match plugins.format_text(&file_path, &file_contents) {
                     Ok(Some(formatted_file_text)) => {
                         if formatted_file_text != file_contents {
                             not_formatted_files_count.fetch_add(1, Ordering::SeqCst);
@@ -129,7 +131,7 @@ fn check_files(environment: &impl Environment, formatter: Formatter, file_paths:
     }
 }
 
-fn format_files(environment: &impl Environment, formatter: Formatter, file_paths: Vec<PathBuf>) {
+fn format_files(environment: &impl Environment, plugins: PluginContainer, file_paths: Vec<PathBuf>) {
     let formatted_files_count = AtomicUsize::new(0);
     let files_count = file_paths.len();
 
@@ -139,7 +141,7 @@ fn format_files(environment: &impl Environment, formatter: Formatter, file_paths
 
         match file_contents {
             Ok(file_contents) => {
-                match formatter.format_text(&file_path, &file_contents) {
+                match plugins.format_text(&file_path, &file_contents) {
                     Ok(Some(formatted_text)) => {
                         if formatted_text != file_contents {
                             match environment.write_file(&file_path, &formatted_text) {

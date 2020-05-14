@@ -25,4 +25,4 @@ fn format_text(file_path: &PathBuf, file_text: &str, config: &Configuration) -> 
     formatter.format_text(&file_path, &file_text)
 }
 
-generate_plugin_code!(Configuration, resolve_config);
+generate_plugin_code!();
