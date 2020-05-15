@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use dprint_core::*;
-use jsonc_parser::parse_text as parse_jsonc_ast;
+use jsonc_parser::parse_to_ast;
 use jsonc_parser::ast::*;
 use jsonc_parser::common::{Position, Ranged, Range};
 use jsonc_parser::tokens::{TokenAndRange};
@@ -9,7 +9,7 @@ use super::context::Context;
 use super::token_finder::TokenFinder;
 
 pub fn parse_items(text: &str, config: &Configuration) -> Result<PrintItems, String> {
-    let parse_result = parse_jsonc_ast(text);
+    let parse_result = parse_to_ast(text);
     let parse_result = match parse_result {
         Ok(result) => result,
         Err(err) => return Err(dprint_core::utils::string_utils::format_diagnostic(
