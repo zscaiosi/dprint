@@ -115,6 +115,10 @@ impl Environment for TestEnvironment {
     fn get_cache_dir(&self) -> Result<PathBuf, ErrBox> {
         Ok(PathBuf::from("/cache"))
     }
+
+    fn get_time_secs(&self) -> u64 {
+        123456
+    }
 }
 
 fn file_patterns_to_glob_set(file_patterns: impl Iterator<Item = String>) -> Result<GlobSet, ErrBox> {

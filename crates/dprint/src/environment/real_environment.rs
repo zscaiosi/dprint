@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::SystemTime;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
@@ -115,5 +116,9 @@ impl Environment for RealEnvironment {
             Ok(path) => Ok(path),
             Err(err) => err!("Error getting cache directory: {:?}", err),
         }
+    }
+
+    fn get_time_secs(&self) -> u64 {
+        SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs()
     }
 }

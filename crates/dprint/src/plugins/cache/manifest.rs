@@ -19,6 +19,8 @@ impl CacheManifest {
 pub struct UrlCacheEntry {
     pub url: String,
     pub file_name: String,
+    /// Created time in *seconds* since epoch.
+    pub created_time: u64,
 }
 
 pub fn read_manifest(environment: &impl Environment) -> Result<CacheManifest, ErrBox> {
@@ -63,13 +65,14 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "a", "file_name": "b" }] }"#
+            r#"{ "urls": [{ "url": "a", "file_name": "b", "created_time": 123 }] }"#
         ).unwrap();
 
         assert_eq!(read_manifest(&environment).unwrap(), CacheManifest {
             urls: vec![UrlCacheEntry {
                 url: String::from("a"),
                 file_name: String::from("b"),
+                created_time: 123,
             }]
         })
     }
@@ -79,7 +82,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "a", file_name: "b" }] }"#
+            r#"{ "urls": [{ "url": "a", file_name: "b", "created_time": 123 }] }"#
         ).unwrap();
 
         assert_eq!(read_manifest(&environment).unwrap(), CacheManifest::new());
@@ -104,17 +107,19 @@ mod test {
                 UrlCacheEntry {
                     url: String::from("a"),
                     file_name: String::from("b"),
+                    created_time: 123,
                 },
                 UrlCacheEntry {
                     url: String::from("c"),
                     file_name: String::from("d"),
+                    created_time: 456,
                 },
             ]
         };
         write_manifest(&manifest, &environment).unwrap();
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[{"url":"a","file_name":"b"},{"url":"c","file_name":"d"}]}"#
+            r#"{"urls":[{"url":"a","file_name":"b","created_time":123},{"url":"c","file_name":"d","created_time":456}]}"#
         );
     }
 }

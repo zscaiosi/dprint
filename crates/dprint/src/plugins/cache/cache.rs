@@ -31,7 +31,11 @@ impl<'a, TEnvironment, TCompileFn> Cache<'a, TEnvironment, TCompileFn> where TEn
         let file_bytes = self.environment.download_file(url).await?;
         let file_name = self.get_file_name_from_url_or_path(url, "compiled_wasm");
         let file_path = cache_dir.join(&file_name);
-        let url_cache_entry = UrlCacheEntry { url: String::from(url), file_name };
+        let url_cache_entry = UrlCacheEntry {
+            url: String::from(url),
+            file_name,
+            created_time: self.environment.get_time_secs()
+        };
 
         self.environment.log("Compiling wasm module...");
         let file_bytes = (self.compile)(&file_bytes)?;
@@ -120,7 +124,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm" }] }"#
+            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm", "created_time": 123456 }] }"#
         ).unwrap();
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
@@ -148,7 +152,7 @@ mod test {
         // should have saved the manifest
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[{"url":"https://plugins.dprint.dev/test.wasm","file_name":"test.compiled_wasm"}]}"#,
+            r#"{"urls":[{"url":"https://plugins.dprint.dev/test.wasm","file_name":"test.compiled_wasm","created_time":123456}]}"#,
         );
         Ok(())
     }
@@ -205,7 +209,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm" }] }"#
+            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm", "created_time": 123456 }] }"#
         ).unwrap();
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
@@ -222,7 +226,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{"urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm" }] }"#
+            r#"{"urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm", "created_time": 123456 }] }"#
         ).unwrap();
         let wasm_file_path = environment.get_cache_dir().unwrap().join("my-file.wasm");
         environment.write_file_bytes(&wasm_file_path, "t".as_bytes()).unwrap();
@@ -235,7 +239,7 @@ mod test {
 
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[]}"# // count should remain the same
+            r#"{"urls":[]}"#
         );
     }
 

@@ -16,4 +16,5 @@ pub trait Environment : std::marker::Sync {
     fn log_error(&self, text: &str);
     async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox>;
     fn get_cache_dir(&self) -> Result<PathBuf, ErrBox>;
+    fn get_time_secs(&self) -> u64;
 }
