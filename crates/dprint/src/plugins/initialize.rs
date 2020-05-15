@@ -46,7 +46,6 @@ fn inner_initialize(config_map: ConfigMap, plugins: &PluginContainer, environmen
     } else {
         Ok(())
     }
-
 }
 
 fn handle_plugins_to_config_map(
