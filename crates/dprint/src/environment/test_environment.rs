@@ -30,6 +30,11 @@ impl TestEnvironment {
         self.logged_messages.lock().unwrap().clone()
     }
 
+    pub fn clear_logs(&self) {
+        self.logged_messages.lock().unwrap().clear();
+        self.logged_errors.lock().unwrap().clear();
+    }
+
     pub fn get_logged_errors(&self) -> Vec<String> {
         self.logged_errors.lock().unwrap().clone()
     }

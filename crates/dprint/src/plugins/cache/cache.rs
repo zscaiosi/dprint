@@ -8,11 +8,11 @@ use super::manifest::*;
 pub struct Cache<'a, TEnvironment : Environment, TCompileFn: CompileFn> {
     environment: &'a TEnvironment,
     cache_manifest: CacheManifest,
-    compile: TCompileFn,
+    compile: &'a TCompileFn,
 }
 
 impl<'a, TEnvironment, TCompileFn> Cache<'a, TEnvironment, TCompileFn> where TEnvironment : Environment, TCompileFn : CompileFn {
-    pub fn new(environment: &'a TEnvironment, compile: TCompileFn) -> Result<Self, ErrBox> {
+    pub fn new(environment: &'a TEnvironment, compile: &'a TCompileFn) -> Result<Self, ErrBox> {
         let cache_manifest = read_manifest(environment)?;
         Ok(Cache {
             environment,
@@ -123,7 +123,7 @@ mod test {
             r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm" }] }"#
         ).unwrap();
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
 
         assert_eq!(file_path, environment.get_cache_dir().unwrap().join("my-file.wasm"));
@@ -135,7 +135,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.add_remote_file("https://plugins.dprint.dev/test.wasm", "t".as_bytes());
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
         let expected_file_path = PathBuf::from("/cache").join("test.compiled_wasm");
 
@@ -159,7 +159,7 @@ mod test {
         environment.add_remote_file("https://plugins.dprint.dev/test.wasm", "t".as_bytes());
         environment.add_remote_file("https://plugins.dprint.dev/other/test.wasm", "t".as_bytes());
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
         assert_eq!(file_path, PathBuf::from("/cache").join("test.compiled_wasm"));
         let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/other/test.wasm").await?;
@@ -172,7 +172,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.add_remote_file("https://plugins.dprint.dev/test", "t".as_bytes());
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test").await?;
         assert_eq!(file_path, PathBuf::from("/cache").join("test.compiled_wasm"));
         Ok(())
@@ -183,7 +183,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.add_remote_file("testing", "t".as_bytes());
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         let file_path = cache.get_plugin_file_path("testing").await?;
         assert_eq!(file_path, PathBuf::from("/cache").join("temp.compiled_wasm"));
         Ok(())
@@ -194,7 +194,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.add_remote_file("testing\\asdf", "t".as_bytes());
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         let file_path = cache.get_plugin_file_path("testing\\asdf").await?;
         assert_eq!(file_path, PathBuf::from("/cache").join("asdf.compiled_wasm"));
         Ok(())
@@ -208,7 +208,7 @@ mod test {
             r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm" }] }"#
         ).unwrap();
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         cache.forget_url("https://plugins.dprint.dev/test.wasm").unwrap();
 
         assert_eq!(
@@ -227,7 +227,7 @@ mod test {
         let wasm_file_path = environment.get_cache_dir().unwrap().join("my-file.wasm");
         environment.write_file_bytes(&wasm_file_path, "t".as_bytes()).unwrap();
 
-        let mut cache = Cache::new(&environment, identity_compile).unwrap();
+        let mut cache = Cache::new(&environment, &identity_compile).unwrap();
         cache.forget_url("https://plugins.dprint.dev/test.wasm").unwrap();
 
         // should delete the file too

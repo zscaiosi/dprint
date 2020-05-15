@@ -309,119 +309,142 @@ mod tests {
     use std::path::PathBuf;
     use super::run_cli;
     use crate::environment::{Environment, TestEnvironment};
-    // use crate::configuration::*;
+    use crate::configuration::*;
     use crate::plugins::wasm::WasmPluginLoader;
+    use crate::types::ErrBox;
+
+    async fn run_test_cli(args: Vec<&'static str>, environment: &impl Environment) -> Result<(), ErrBox> {
+        let mut args: Vec<String> = args.into_iter().map(String::from).collect();
+        args.insert(0, String::from(""));
+        let plugin_loader = WasmPluginLoader::new(environment, &quick_compile);
+        run_cli(args, environment, &plugin_loader).await
+    }
 
     #[tokio::test]
-    async fn it_should_work_with_wasm_file() {
-        // todo: integration test here covering all the bases...
+    async fn it_should_output_version_with_no_plugins() {
+        let environment = TestEnvironment::new();
+        run_test_cli(vec!["--version"], &environment).await.unwrap();
+        let logged_messages = environment.get_logged_messages();
+        assert_eq!(logged_messages, vec![format!("dprint v{}", env!("CARGO_PKG_VERSION"))]);
+    }
+
+    #[tokio::test]
+    async fn it_should_output_version_with_plugins() {
         let environment = get_test_environment_with_remote_plugin();
         environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
             "projectType": "openSource",
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
-        let plugin_loader = WasmPluginLoader::new(&environment);
-        run_cli(vec![String::from(""), String::from("--version")], &environment, &plugin_loader).await.unwrap();
+
+        run_test_cli(vec!["--version"], &environment).await.unwrap();
         let logged_messages = environment.get_logged_messages();
-        assert_eq!(logged_messages.len(), 3);
-        assert_eq!(logged_messages[0], format!("dprint v{}", env!("CARGO_PKG_VERSION")));
-        assert_eq!(logged_messages[1], "Compiling wasm module...");
-        assert_eq!(logged_messages[2], "test-plugin v0.1.0");
+        assert_eq!(logged_messages, vec![
+            format!("dprint v{}", env!("CARGO_PKG_VERSION")),
+            String::from("Compiling wasm module..."), // this should happen after getting dprint version
+            String::from("test-plugin v0.1.0")
+        ]);
+
+        environment.clear_logs();
+        run_test_cli(vec!["--version"], &environment).await.unwrap();
+        let logged_messages = environment.get_logged_messages();
+        assert_eq!(logged_messages, vec![
+            format!("dprint v{}", env!("CARGO_PKG_VERSION")),
+            String::from("test-plugin v0.1.0")
+        ]);
     }
 
-    // #[tokio::test]
-    // async fn it_should_output_version() {
-    //     let environment = TestEnvironment::new();
-    //     run_cli(vec![String::from(""), String::from("--version")], &environment).await.unwrap();
-    //     let logged_messages = environment.get_logged_messages();
-    //     assert_eq!(logged_messages[0], format!("dprint v{}", env!("CARGO_PKG_VERSION")));
-    //     assert_eq!(logged_messages.len(), 3); // good enough
-    // }
+    #[tokio::test]
+    async fn it_should_output_resolve_config() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        run_test_cli(vec!["--output-resolved-config"], &environment).await.unwrap();
+        let logged_messages = environment.get_logged_messages();
+        assert_eq!(logged_messages, vec!["test-plugin: {\n  \"ending\": \"formatted\"\n}"]);
+    }
 
-    // #[tokio::test]
-    // async fn it_should_output_resolve_config() {
-    //     let environment = TestEnvironment::new();
-    //     run_cli(vec![String::from(""), String::from("--output-resolved-config")], &environment).await.unwrap();
-    //     let logged_messages = environment.get_logged_messages();
-    //     assert_eq!(logged_messages[0].starts_with("typescript/javascript: {\n"), true); // good enough
-    //     assert_eq!(logged_messages[1].starts_with("json/jsonc: {\n"), true);
-    //     assert_eq!(logged_messages.len(), 2);
-    // }
+    #[tokio::test]
+    async fn it_should_output_resolved_file_paths() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("/file.ts"), "const t=4;").unwrap();
+        environment.write_file(&PathBuf::from("/file2.ts"), "const t=4;").unwrap();
+        run_test_cli(vec!["--output-file-paths", "**/*.ts"], &environment).await.unwrap();
+        let mut logged_messages = environment.get_logged_messages();
+        logged_messages.sort();
+        assert_eq!(logged_messages, vec!["/file.ts", "/file2.ts"]);
+    }
 
-    // #[tokio::test]
-    // async fn it_should_output_resolved_file_paths() {
-    //     let environment = TestEnvironment::new();
-    //     environment.write_file(&PathBuf::from("/file.ts"), "const t=4;").unwrap();
-    //     environment.write_file(&PathBuf::from("/file2.ts"), "const t=4;").unwrap();
-    //     run_cli(vec![String::from(""), String::from("--output-file-paths"), String::from("**/*.ts")], &environment).await.unwrap();
-    //     let mut logged_messages = environment.get_logged_messages();
-    //     logged_messages.sort();
-    //     assert_eq!(logged_messages, vec!["/file.ts", "/file2.ts"]);
-    // }
+    #[tokio::test]
+    async fn it_should_format_files() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path = PathBuf::from("/file.txt");
+        environment.write_file(&file_path, "text").unwrap();
+        run_test_cli(vec!["/file.txt"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path).unwrap(), "text_formatted");
+    }
 
-    // #[tokio::test]
-    // async fn it_should_format_files() {
-    //     let environment = TestEnvironment::new();
-    //     let file_path = PathBuf::from("/file.ts");
-    //     environment.write_file(&file_path, "const t=4;").unwrap();
-    //     run_cli(vec![String::from(""), String::from("/file.ts")], &environment).await.unwrap();
-    //     assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    //     assert_eq!(environment.read_file(&file_path).unwrap(), "const t = 4;\n");
-    // }
+    #[tokio::test]
+    async fn it_should_ignore_files_in_node_modules_by_default() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("/node_modules/file.txt"), "").unwrap();
+        environment.write_file(&PathBuf::from("/test/node_modules/file.txt"), "").unwrap();
+        run_test_cli(vec!["**/*.txt"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
 
-    // #[tokio::test]
-    // async fn it_should_ignore_files_in_node_modules_by_default() {
-    //     let environment = TestEnvironment::new();
-    //     environment.write_file(&PathBuf::from("/node_modules/file.ts"), "const t=4;").unwrap();
-    //     environment.write_file(&PathBuf::from("/test/node_modules/file.ts"), "const t=4;").unwrap();
-    //     run_cli(vec![String::from(""), String::from("**/*.ts")], &environment).await.unwrap();
-    //     assert_eq!(environment.get_logged_messages().len(), 0);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    // }
+    #[tokio::test]
+    async fn it_should_not_ignore_files_in_node_modules_when_allowed() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("/node_modules/file.txt"), "const t=4;").unwrap();
+        environment.write_file(&PathBuf::from("/test/node_modules/file.txt"), "const t=4;").unwrap();
+        run_test_cli(vec!["--allow-node-modules", "**/*.txt"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
 
-    // #[tokio::test]
-    // async fn it_should_not_ignore_files_in_node_modules_when_allowed() {
-    //     let environment = TestEnvironment::new();
-    //     environment.write_file(&PathBuf::from("/node_modules/file.ts"), "const t=4;").unwrap();
-    //     environment.write_file(&PathBuf::from("/test/node_modules/file.ts"), "const t=4;").unwrap();
-    //     run_cli(vec![String::from(""), String::from("--allow-node-modules"), String::from("**/*.ts")], &environment).await.unwrap();
-    //     assert_eq!(environment.get_logged_messages(), vec![String::from("Formatted 2 files.")]);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    // }
+    #[tokio::test]
+    async fn it_should_format_files_with_config() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path1 = PathBuf::from("/file1.txt");
+        let file_path2 = PathBuf::from("/file2.txt");
+        environment.write_file(&PathBuf::from("/config.json"), r#"{
+            "projectType": "openSource",
+            "test-plugin": {
+                "ending": "custom-formatted"
+            },
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+        environment.write_file(&file_path1, "text").unwrap();
+        environment.write_file(&file_path2, "text2").unwrap();
 
-    // #[tokio::test]
-    // async fn it_should_format_files_with_config() {
-    //     let environment = TestEnvironment::new();
-    //     let file_path1 = PathBuf::from("/file1.ts");
-    //     let file_path2 = PathBuf::from("/file2.ts");
-    //     let config_file_path = PathBuf::from("/config.json");
-    //     environment.write_file(&file_path1, "const t=4;").unwrap();
-    //     environment.write_file(&file_path2, "log(   55    );").unwrap();
-    //     environment.write_file(&config_file_path, r#"{ "projectType": "openSource", "typescript": { "semiColons": "asi" } }"#).unwrap();
+        run_test_cli(vec!["--config", "/config.json", "/file1.txt", "/file2.txt"], &environment).await.unwrap();
 
-    //     run_cli(vec![String::from(""), String::from("--config"), String::from("/config.json"), String::from("/file1.ts"), String::from("/file2.ts")], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path1).unwrap(), "text_custom-formatted");
+        assert_eq!(environment.read_file(&file_path2).unwrap(), "text2_custom-formatted");
+    }
 
-    //     assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    //     assert_eq!(environment.read_file(&file_path1).unwrap(), "const t = 4\n");
-    //     assert_eq!(environment.read_file(&file_path2).unwrap(), "log(55)\n");
-    // }
+    #[tokio::test]
+    async fn it_should_format_files_with_config_using_c() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path1 = PathBuf::from("/file1.txt");
+        environment.write_file(&file_path1, "text").unwrap();
+        environment.write_file(&PathBuf::from("/config.json"), r#"{
+            "projectType": "openSource",
+            "test-plugin": {
+                "ending": "custom-formatted"
+            },
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
 
-    // #[tokio::test]
-    // async fn it_should_format_files_with_config_using_c() {
-    //     let environment = TestEnvironment::new();
-    //     let file_path1 = PathBuf::from("/file1.ts");
-    //     let config_file_path = PathBuf::from("/config.json");
-    //     environment.write_file(&file_path1, "const t=4;").unwrap();
-    //     environment.write_file(&config_file_path, r#"{ "projectType": "openSource", "typescript": { "semiColons": "asi" } }"#).unwrap();
+        run_test_cli(vec!["-c", "/config.json", "/file1.txt"], &environment).await.unwrap();
 
-    //     run_cli(vec![String::from(""), String::from("-c"), String::from("/config.json"), String::from("/file1.ts")], &environment).await.unwrap();
-
-    //     assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    //     assert_eq!(environment.read_file(&file_path1).unwrap(), "const t = 4\n");
-    // }
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path1).unwrap(), "text_custom-formatted");
+    }
 
     // #[tokio::test]
     // async fn it_should_format_files_with_config_includes() {
@@ -490,61 +513,90 @@ mod tests {
     //     assert_eq!(environment.get_logged_errors().len(), 0);
     // }
 
-    // #[tokio::test]
-    // async fn it_should_not_output_when_no_files_need_formatting_for_check() {
-    //     let environment = TestEnvironment::new();
-    //     let file_path = PathBuf::from("/file.ts");
-    //     environment.write_file(&file_path, "const t = 4;\n").unwrap();
-    //     run_cli(vec![String::from(""), String::from("--check"), String::from("/file.ts")], &environment).await.unwrap();
-    //     assert_eq!(environment.get_logged_messages().len(), 0);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    // }
+    #[tokio::test]
+    async fn it_should_not_output_when_no_files_need_formatting_for_check() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path = PathBuf::from("/file.txt");
+        environment.write_file(&file_path, "text_formatted").unwrap();
+        run_test_cli(vec!["--check", "/file.ts"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
 
-    // #[tokio::test]
-    // async fn it_should_output_when_a_file_need_formatting_for_check() {
-    //     let environment = TestEnvironment::new();
-    //     environment.write_file(&PathBuf::from("/file.ts"), "const t=4;").unwrap();
-    //     let error_message = run_cli(vec![String::from(""), String::from("--check"), String::from("/file.ts")], &environment).await.err().unwrap();
-    //     assert_eq!(error_message.to_string(), "Found 1 not formatted file.");
-    //     assert_eq!(environment.get_logged_messages().len(), 0);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    // }
+    #[tokio::test]
+    async fn it_should_output_when_a_file_need_formatting_for_check() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("/file.txt"), "const t=4;").unwrap();
+        let error_message = run_test_cli(vec!["--check", "/file.txt"], &environment).await.err().unwrap();
+        assert_eq!(error_message.to_string(), "Found 1 not formatted file.");
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
 
-    // #[tokio::test]
-    // async fn it_should_output_when_files_need_formatting_for_check() {
-    //     let environment = TestEnvironment::new();
-    //     environment.write_file(&PathBuf::from("/file1.ts"), "const t=4;").unwrap();
-    //     environment.write_file(&PathBuf::from("/file2.ts"), "const t=4;").unwrap();
-    //     let error_message = run_cli(vec![String::from(""), String::from("--check"), String::from("/file1.ts"), String::from("/file2.ts")], &environment).await.err().unwrap();
-    //     assert_eq!(error_message.to_string(), "Found 2 not formatted files.");
-    //     assert_eq!(environment.get_logged_messages().len(), 0);
-    //     assert_eq!(environment.get_logged_errors().len(), 0);
-    // }
+    #[tokio::test]
+    async fn it_should_output_when_files_need_formatting_for_check() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("/file1.txt"), "const t=4;").unwrap();
+        environment.write_file(&PathBuf::from("/file2.txt"), "const t=4;").unwrap();
+
+        let error_message = run_test_cli(vec!["--check", "/file1.txt", "/file2.txt"], &environment).await.err().unwrap();
+        assert_eq!(error_message.to_string(), "Found 2 not formatted files.");
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
 
     // #[tokio::test]
     // async fn it_should_initialize() {
     //     let environment = TestEnvironment::new();
-    //     run_cli(vec![String::from(""), String::from("--init")], &environment).await.unwrap();
+    //     run_test_cli(vec!["--init"], &environment).await.unwrap();
     //     assert_eq!(environment.get_logged_messages(), vec!["Created dprint.config.json"]);
     //     assert_eq!(environment.read_file(&PathBuf::from("./dprint.config.json")).unwrap(), get_init_config_file_text());
-    //     // ensure this file doesn't need formatting
+    //     // ensure this file doesn't error
+    //     run_test_cli(vec!["--config", "./dprint.config.json"], &environment).await.unwrap();
     //     assert_eq!(
-    //         run_cli(vec![String::from(""), String::from("--check"), String::from("/dprint.config.json")], &environment).await.err().is_none(),
+    //         run_test_cli(vec!["--config", "dprint.config.json"], &environment).await.err().is_none(),
     //         true
     //     );
     // }
 
-    // #[tokio::test]
-    // async fn it_should_error_when_config_file_exists_on_initialize() {
-    //     let environment = TestEnvironment::new();
-    //     environment.write_file(&PathBuf::from("./dprint.config.json"), "{}").unwrap();
-    //     let error_message = run_cli(vec![String::from(""), String::from("--init")], &environment).await.err().unwrap();
-    //     assert_eq!(error_message.to_string(), "Configuration file 'dprint.config.json' already exists in current working directory.");
-    // }
+    #[tokio::test]
+    async fn it_should_error_when_config_file_exists_on_initialize() {
+        let environment = TestEnvironment::new();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), "{}").unwrap();
+        let error_message = run_test_cli(vec!["--init"], &environment).await.err().unwrap();
+        assert_eq!(error_message.to_string(), "Configuration file 'dprint.config.json' already exists in current working directory.");
+    }
+
+    static PLUGIN_BYTES: &'static [u8] = include_bytes!("../test/test_plugin.wasm");
+    lazy_static! {
+        // cache the compilation so this only has to be done once across all tests
+        static ref COMPILED_PLUGIN_BYTES: Vec<u8> = {
+            crate::plugins::wasm::compile(PLUGIN_BYTES).unwrap()
+        };
+    }
+
+    async fn get_initialized_test_environment_with_remote_plugin() -> Result<TestEnvironment, ErrBox> {
+        let environment = get_test_environment_with_remote_plugin();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+        run_test_cli(vec!["--version"], &environment).await.unwrap(); // cause initialization
+        environment.clear_logs();
+        Ok(environment)
+    }
 
     fn get_test_environment_with_remote_plugin() -> TestEnvironment {
         let environment = TestEnvironment::new();
-        environment.add_remote_file("https://plugins.dprint.dev/test-plugin.wasm", include_bytes!("../test/test_plugin.wasm"));
+        environment.add_remote_file("https://plugins.dprint.dev/test-plugin.wasm", PLUGIN_BYTES);
         environment
+    }
+
+    pub fn quick_compile(wasm_bytes: &[u8]) -> Result<Vec<u8>, ErrBox> {
+        if wasm_bytes == PLUGIN_BYTES {
+            Ok(COMPILED_PLUGIN_BYTES.clone())
+        } else {
+            unreachable!()
+        }
     }
 }

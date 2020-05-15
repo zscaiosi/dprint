@@ -88,7 +88,7 @@ pub mod macros {
 
             #[no_mangle]
             pub fn get_resolved_config() -> usize {
-                let json = serde_json::to_string(&get_resolved_config_result().config).unwrap();
+                let json = serde_json::to_string_pretty(&get_resolved_config_result().config).unwrap();
                 set_shared_bytes_str(json)
             }
 

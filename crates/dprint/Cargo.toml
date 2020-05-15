@@ -26,3 +26,4 @@ wasmer-runtime-core="0.17.0"
 
 [dev-dependencies]
 globset = "0.4.5"
+lazy_static = "1.4.0"

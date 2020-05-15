@@ -3,16 +3,17 @@ use crate::environment::Environment;
 use crate::types::ErrBox;
 use super::super::cache::Cache;
 use super::super::{Plugin, PluginContainer, CompileFn, PluginLoader};
-use super::{WasmPlugin, compile};
+use super::WasmPlugin;
 
-pub struct WasmPluginLoader<'a, TEnvironment : Environment> {
+pub struct WasmPluginLoader<'a, TEnvironment : Environment, TCompileFn : CompileFn> {
     environment: &'a TEnvironment,
+    compile: &'a TCompileFn,
 }
 
 #[async_trait(?Send)]
-impl<'a, TEnvironment : Environment> PluginLoader for WasmPluginLoader<'a, TEnvironment> {
+impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> PluginLoader for WasmPluginLoader<'a, TEnvironment, TCompileFn> {
     async fn load_plugins(&self, urls: &Vec<String>) -> Result<PluginContainer, ErrBox> {
-        let mut cache = Cache::new(self.environment, compile)?;
+        let mut cache = Cache::new(self.environment, self.compile)?;
         let mut plugin_container = Vec::new();
 
         for url in urls.iter() {
@@ -30,12 +31,12 @@ impl<'a, TEnvironment : Environment> PluginLoader for WasmPluginLoader<'a, TEnvi
     }
 }
 
-impl<'a, TEnvironment : Environment> WasmPluginLoader<'a, TEnvironment> {
-    pub fn new(environment: &'a TEnvironment) -> WasmPluginLoader<'a, TEnvironment> {
-        WasmPluginLoader { environment }
+impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> WasmPluginLoader<'a, TEnvironment, TCompileFn> {
+    pub fn new(environment: &'a TEnvironment, compile: &'static TCompileFn) -> Self {
+        WasmPluginLoader { environment, compile }
     }
 
-    async fn load_plugin<TCompileFn : CompileFn>(
+    async fn load_plugin(
         &self,
         url: &str,
         cache: &mut Cache<'a, TEnvironment, TCompileFn>,

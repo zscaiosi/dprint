@@ -6,7 +6,7 @@ mod wasm_plugin_loader;
 mod plugin;
 
 use bytes_transmitter::*;
-use compile::*;
+pub use compile::*;
 use functions::*;
 use load_instance::*;
 use plugin::*;

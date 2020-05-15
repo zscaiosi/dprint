@@ -24,7 +24,7 @@ impl TestPluginLoader {
 #[cfg(test)]
 #[async_trait(?Send)]
 impl PluginLoader for TestPluginLoader {
-    async fn load_plugins(&self, urls: &Vec<String>) -> Result<PluginContainer, ErrBox> {
+    async fn load_plugins(&self, _: &Vec<String>) -> Result<PluginContainer, ErrBox> {
         Ok(self.plugins.borrow_mut().take().unwrap())
     }
 }
