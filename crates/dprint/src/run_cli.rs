@@ -19,7 +19,7 @@ pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_l
     }
 
     if matches.is_present("init") {
-        init_config_file(environment)?;
+        init_config_file(environment).await?;
         environment.log("Created dprint.config.json");
         return Ok(());
     }
@@ -85,10 +85,10 @@ fn output_resolved_config(plugins: &PluginContainer, environment: &impl Environm
     }
 }
 
-fn init_config_file(environment: &impl Environment) -> Result<(), ErrBox> {
+async fn init_config_file(environment: &impl Environment) -> Result<(), ErrBox> {
     let config_file_path = PathBuf::from("./dprint.config.json");
     if !environment.path_exists(&config_file_path) {
-        environment.write_file(&config_file_path, configuration::get_init_config_file_text())
+        environment.write_file(&config_file_path, &configuration::get_init_config_file_text(environment).await?)
     } else {
         err!("Configuration file 'dprint.config.json' already exists in current working directory.")
     }
@@ -558,19 +558,29 @@ mod tests {
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
-    // #[tokio::test]
-    // async fn it_should_initialize() {
-    //     let environment = TestEnvironment::new();
-    //     run_test_cli(vec!["--init"], &environment).await.unwrap();
-    //     assert_eq!(environment.get_logged_messages(), vec!["Created dprint.config.json"]);
-    //     assert_eq!(environment.read_file(&PathBuf::from("./dprint.config.json")).unwrap(), get_init_config_file_text());
-    //     // ensure this file doesn't error
-    //     run_test_cli(vec!["--config", "./dprint.config.json"], &environment).await.unwrap();
-    //     assert_eq!(
-    //         run_test_cli(vec!["--config", "dprint.config.json"], &environment).await.err().is_none(),
-    //         true
-    //     );
-    // }
+    #[tokio::test]
+    async fn it_should_initialize() {
+        let environment = TestEnvironment::new();
+        environment.add_remote_file(crate::plugins::REMOTE_INFO_URL, r#"{
+            "schemaVersion": 1,
+            "pluginSystemSchemaVersion": 1,
+            "latest": [{
+                "name": "dprint-plugin-typescript",
+                "version": "0.17.2",
+                "url": "https://plugins.dprint.dev/typescript-0.17.2.wasm",
+                "configKey": "typescript"
+            }, {
+                "name": "dprint-plugin-jsonc",
+                "version": "0.2.3",
+                "url": "https://plugins.dprint.dev/json-0.2.3.wasm",
+                "configKey": "json"
+            }]
+        }"#.as_bytes());
+        let expected_text = get_init_config_file_text(&environment).await.unwrap();
+        run_test_cli(vec!["--init"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Created dprint.config.json"]);
+        assert_eq!(environment.read_file(&PathBuf::from("./dprint.config.json")).unwrap(), expected_text);
+    }
 
     #[tokio::test]
     async fn it_should_error_when_config_file_exists_on_initialize() {
