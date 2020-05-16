@@ -590,6 +590,7 @@ mod tests {
         assert_eq!(error_message.to_string(), "Configuration file 'dprint.config.json' already exists in current working directory.");
     }
 
+    // If this file doesn't exist, run `./build.ps1` in test/plugin. (Please consider helping me do something better here :))
     static PLUGIN_BYTES: &'static [u8] = include_bytes!("../test/test_plugin.wasm");
     lazy_static! {
         // cache the compilation so this only has to be done once across all tests
