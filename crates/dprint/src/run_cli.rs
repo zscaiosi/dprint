@@ -1,5 +1,6 @@
 use clap::{App, Arg, Values, ArgMatches};
 use std::path::PathBuf;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use super::environment::Environment;
 use super::configuration;
@@ -81,7 +82,10 @@ fn output_file_paths<'a>(file_paths: impl Iterator<Item=&'a PathBuf>, environmen
 
 fn output_resolved_config(plugins: &PluginContainer, environment: &impl Environment) {
     for plugin in plugins.iter() {
-        environment.log(&format!("{}: {}", plugin.config_keys().join("/"), plugin.get_resolved_config()));
+        let text = plugin.get_resolved_config();
+        let key_values: HashMap<String, String> = serde_json::from_str(&text).unwrap();
+        let pretty_text = serde_json::to_string_pretty(&key_values).unwrap();
+        environment.log(&format!("{}: {}", plugin.config_keys().join("/"), pretty_text));
     }
 }
 
