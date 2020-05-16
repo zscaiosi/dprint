@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 
 /// Information about a plugin.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginInfo {
     /// The name of the plugin.

@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use dprint_core::configuration::{ConfigurationDiagnostic, GlobalConfiguration};
 use dprint_core::plugins::PluginInfo;
-use bytes::Bytes;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -17,9 +16,8 @@ pub struct WasmPlugin {
 }
 
 impl WasmPlugin {
-    pub fn new(compiled_wasm_bytes: Bytes) -> Result<Self, ErrBox> {
-        // todo: implement a wasm instance pool
-        let instance = load_instance(&compiled_wasm_bytes)?;
+    pub fn new(compiled_wasm_bytes: &[u8]) -> Result<Self, ErrBox> {
+        let instance = load_instance(compiled_wasm_bytes)?;
         let wasm_functions = Rc::new(WasmFunctions::new(instance)?);
         let bytes_transmitter = BytesTransmitter::new(wasm_functions.clone());
 

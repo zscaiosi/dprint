@@ -315,6 +315,7 @@ mod tests {
     use crate::environment::{Environment, TestEnvironment};
     use crate::configuration::*;
     use crate::plugins::wasm::WasmPluginLoader;
+    use crate::plugins::CompilationResult;
     use crate::types::ErrBox;
 
     async fn run_test_cli(args: Vec<&'static str>, environment: &impl Environment) -> Result<(), ErrBox> {
@@ -598,7 +599,7 @@ mod tests {
     static PLUGIN_BYTES: &'static [u8] = include_bytes!("../test/test_plugin.wasm");
     lazy_static! {
         // cache the compilation so this only has to be done once across all tests
-        static ref COMPILED_PLUGIN_BYTES: Vec<u8> = {
+        static ref COMPILATION_RESULT: CompilationResult = {
             crate::plugins::wasm::compile(PLUGIN_BYTES).unwrap()
         };
     }
@@ -620,9 +621,9 @@ mod tests {
         environment
     }
 
-    pub fn quick_compile(wasm_bytes: &[u8]) -> Result<Vec<u8>, ErrBox> {
+    pub fn quick_compile(wasm_bytes: &[u8]) -> Result<CompilationResult, ErrBox> {
         if wasm_bytes == PLUGIN_BYTES {
-            Ok(COMPILED_PLUGIN_BYTES.clone())
+            Ok(COMPILATION_RESULT.clone())
         } else {
             unreachable!()
         }

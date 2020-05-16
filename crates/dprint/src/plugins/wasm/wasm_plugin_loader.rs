@@ -41,8 +41,8 @@ impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> WasmPluginLoader<'a
         url: &str,
         cache: &mut Cache<'a, TEnvironment, TCompileFn>,
     ) -> Result<Box<dyn Plugin>, ErrBox> {
-        let file_path = cache.get_plugin_file_path(url).await?;
-        let file_bytes = match self.environment.read_file_bytes(&file_path) {
+        let cache_item = cache.get_plugin_cache_item(url).await?;
+        let file_bytes = match self.environment.read_file_bytes(&cache_item.file_path) {
             Ok(file_bytes) => file_bytes,
             Err(err) => {
                 self.environment.log_error(&format!(
@@ -52,11 +52,11 @@ impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> WasmPluginLoader<'a
 
                 // try again
                 cache.forget_url(url)?;
-                let file_path = cache.get_plugin_file_path(url).await?;
-                self.environment.read_file_bytes(&file_path)?
+                let cache_item = cache.get_plugin_cache_item(url).await?;
+                self.environment.read_file_bytes(&cache_item.file_path)?
             }
         };
 
-        Ok(Box::new(WasmPlugin::new(file_bytes)?))
+        Ok(Box::new(WasmPlugin::new(&file_bytes)?))
     }
 }

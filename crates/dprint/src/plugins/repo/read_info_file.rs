@@ -5,11 +5,11 @@ use jsonc_parser::{parse_to_value, JsonValue, JsonObject};
 #[derive(PartialEq, Debug)]
 pub struct InfoFile {
     pub plugin_system_schema_version: u32,
-    pub latest_plugins: Vec<PluginInfo>,
+    pub latest_plugins: Vec<InfoFilePluginInfo>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct PluginInfo {
+pub struct InfoFilePluginInfo {
     pub name: String,
     pub version: String,
     pub url: String,
@@ -64,7 +64,7 @@ pub async fn read_info_file(environment: &impl Environment) -> Result<InfoFile, 
     })
 }
 
-fn get_latest_plugin(value: JsonValue) -> Result<PluginInfo, ErrBox> {
+fn get_latest_plugin(value: JsonValue) -> Result<InfoFilePluginInfo, ErrBox> {
     let mut obj = match value {
         JsonValue::Object(obj) => obj,
         _ => return err!("Expected an object in the latest array."),
@@ -74,7 +74,7 @@ fn get_latest_plugin(value: JsonValue) -> Result<PluginInfo, ErrBox> {
     let url = get_string(&mut obj, "url")?;
     let config_key = get_string(&mut obj, "configKey")?;
 
-    Ok(PluginInfo { name, version, url, config_key })
+    Ok(InfoFilePluginInfo { name, version, url, config_key })
 }
 
 fn get_string(value: &mut JsonObject, name: &str) -> Result<String, ErrBox> {
@@ -110,12 +110,12 @@ mod test {
         let info_file = read_info_file(&environment).await.unwrap();
         assert_eq!(info_file, InfoFile {
             plugin_system_schema_version: 1,
-            latest_plugins: vec![PluginInfo {
+            latest_plugins: vec![InfoFilePluginInfo {
                 name: String::from("dprint-plugin-typescript"),
                 version: String::from("0.17.2"),
                 url: String::from("https://plugins.dprint.dev/typescript-0.17.2.wasm"),
                 config_key: String::from("typescript"),
-            }, PluginInfo {
+            }, InfoFilePluginInfo {
                 name: String::from("dprint-plugin-jsonc"),
                 version: String::from("0.2.3"),
                 url: String::from("https://plugins.dprint.dev/json-0.2.3.wasm"),

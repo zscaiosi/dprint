@@ -1,12 +1,13 @@
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
+use dprint_core::plugins::PluginInfo;
 
 use crate::environment::Environment;
 use crate::types::ErrBox;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CacheManifest {
-    pub urls: Vec<UrlCacheEntry>
+    pub urls: Vec<UrlCacheEntry>,
 }
 
 impl CacheManifest {
@@ -16,11 +17,14 @@ impl CacheManifest {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct UrlCacheEntry {
     pub url: String,
     pub file_name: String,
     /// Created time in *seconds* since epoch.
     pub created_time: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_info: Option<PluginInfo>,
 }
 
 pub fn read_manifest(environment: &impl Environment) -> Result<CacheManifest, ErrBox> {
@@ -65,7 +69,23 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "a", "file_name": "b", "created_time": 123 }] }"#
+            r#"{
+    "urls": [{
+        "url": "a",
+        "fileName": "b",
+        "createdTime": 123
+    },{
+        "url": "c",
+        "fileName": "d",
+        "createdTime": 456,
+        "pluginInfo": {
+            "name": "test-plugin",
+            "version": "0.1.0",
+            "configKeys": ["test-plugin"],
+            "fileExtensions": ["txt","dat"]
+        }
+    }]
+}"#
         ).unwrap();
 
         assert_eq!(read_manifest(&environment).unwrap(), CacheManifest {
@@ -73,6 +93,12 @@ mod test {
                 url: String::from("a"),
                 file_name: String::from("b"),
                 created_time: 123,
+                plugin_info: None,
+            }, UrlCacheEntry {
+                url: String::from("c"),
+                file_name: String::from("d"),
+                created_time: 456,
+                plugin_info: Some(get_test_plugin_info()),
             }]
         })
     }
@@ -82,7 +108,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "a", file_name: "b", "created_time": 123 }] }"#
+            r#"{ "urls": [{ "url": "a", file_name: "b", "createdTime": 123 }] }"#
         ).unwrap();
 
         assert_eq!(read_manifest(&environment).unwrap(), CacheManifest::new());
@@ -108,18 +134,29 @@ mod test {
                     url: String::from("a"),
                     file_name: String::from("b"),
                     created_time: 123,
+                    plugin_info: None,
                 },
                 UrlCacheEntry {
                     url: String::from("c"),
                     file_name: String::from("d"),
                     created_time: 456,
+                    plugin_info: Some(get_test_plugin_info()),
                 },
             ]
         };
         write_manifest(&manifest, &environment).unwrap();
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[{"url":"a","file_name":"b","created_time":123},{"url":"c","file_name":"d","created_time":456}]}"#
+            r#"{"urls":[{"url":"a","fileName":"b","createdTime":123},{"url":"c","fileName":"d","createdTime":456,"pluginInfo":{"name":"test-plugin","version":"0.1.0","configKeys":["test-plugin"],"fileExtensions":["txt","dat"]}}]}"#
         );
+    }
+
+    fn get_test_plugin_info() -> PluginInfo {
+        PluginInfo {
+            name: String::from("test-plugin"),
+            version: String::from("0.1.0"),
+            config_keys: vec![String::from("test-plugin")],
+            file_extensions: vec![String::from("txt"), String::from("dat")],
+        }
     }
 }

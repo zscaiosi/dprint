@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use dprint_core::plugins::PluginInfo;
 
 use crate::environment::Environment;
 use crate::types::ErrBox;
@@ -11,6 +12,11 @@ pub struct Cache<'a, TEnvironment : Environment, TCompileFn: CompileFn> {
     compile: &'a TCompileFn,
 }
 
+pub struct PluginCacheItem {
+    pub file_path: PathBuf,
+    pub info: PluginInfo,
+}
+
 impl<'a, TEnvironment, TCompileFn> Cache<'a, TEnvironment, TCompileFn> where TEnvironment : Environment, TCompileFn : CompileFn {
     pub fn new(environment: &'a TEnvironment, compile: &'a TCompileFn) -> Result<Self, ErrBox> {
         let cache_manifest = read_manifest(environment)?;
@@ -21,31 +27,43 @@ impl<'a, TEnvironment, TCompileFn> Cache<'a, TEnvironment, TCompileFn> where TEn
         })
     }
 
-    pub async fn get_plugin_file_path(&mut self, url: &str) -> Result<PathBuf, ErrBox> {
+    pub async fn get_plugin_cache_item(&mut self, url: &str) -> Result<PluginCacheItem, ErrBox> {
         let cache_dir = self.environment.get_cache_dir()?;
         if let Some(cache_entry) = self.get_url_cache_entry(url) {
-            let cache_file = cache_dir.join(&cache_entry.file_name);
-            return Ok(PathBuf::from(&cache_file));
+            let file_path = cache_dir.join(&cache_entry.file_name);
+            let info = match cache_entry.plugin_info.clone() {
+                Some(info) => info,
+                None => return err!("Expected to have plugin info stored in the cache."),
+            };
+
+            return Ok(PluginCacheItem {
+                file_path,
+                info,
+            });
         }
 
         let file_bytes = self.environment.download_file(url).await?;
         let file_name = self.get_file_name_from_url_or_path(url, "compiled_wasm");
         let file_path = cache_dir.join(&file_name);
+
+        self.environment.log("Compiling wasm module...");
+        let compile_result = (self.compile)(&file_bytes)?;
         let url_cache_entry = UrlCacheEntry {
             url: String::from(url),
             file_name,
-            created_time: self.environment.get_time_secs()
+            created_time: self.environment.get_time_secs(),
+            plugin_info: Some(compile_result.plugin_info.clone()),
         };
 
-        self.environment.log("Compiling wasm module...");
-        let file_bytes = (self.compile)(&file_bytes)?;
-
-        self.environment.write_file_bytes(&file_path, &file_bytes)?;
+        self.environment.write_file_bytes(&file_path, &compile_result.bytes)?;
 
         self.cache_manifest.urls.push(url_cache_entry);
         self.save_manifest()?;
 
-        Ok(file_path)
+        Ok(PluginCacheItem {
+            file_path,
+            info: compile_result.plugin_info,
+        })
     }
 
     pub fn forget_url(&mut self, url: &str) -> Result<(), ErrBox> {
@@ -115,22 +133,35 @@ impl<'a, TEnvironment, TCompileFn> Cache<'a, TEnvironment, TCompileFn> where TEn
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use dprint_core::plugins::PluginInfo;
     use crate::environment::TestEnvironment;
+    use crate::plugins::types::CompilationResult;
     use crate::types::ErrBox;
+    use super::*;
 
     #[tokio::test]
     async fn it_should_read_file_paths_from_manifest() -> Result<(), ErrBox> {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm", "created_time": 123456 }] }"#
+            r#"{ "urls": [{
+    "url": "https://plugins.dprint.dev/test.wasm",
+    "fileName": "my-file.wasm",
+    "createdTime": 123456,
+    "pluginInfo": {
+        "name": "test-plugin",
+        "version": "0.1.0",
+        "configKeys": ["test-plugin"],
+        "fileExtensions": ["txt","dat"]
+    }
+}] }"#
         ).unwrap();
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
+        let cache_item = cache.get_plugin_cache_item("https://plugins.dprint.dev/test.wasm").await?;
 
-        assert_eq!(file_path, environment.get_cache_dir().unwrap().join("my-file.wasm"));
+        assert_eq!(cache_item.file_path, environment.get_cache_dir().unwrap().join("my-file.wasm"));
+        assert_eq!(cache_item.info, get_test_plugin_info());
         Ok(())
     }
 
@@ -140,19 +171,19 @@ mod test {
         environment.add_remote_file("https://plugins.dprint.dev/test.wasm", "t".as_bytes());
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
+        let file_path = cache.get_plugin_cache_item("https://plugins.dprint.dev/test.wasm").await?.file_path;
         let expected_file_path = PathBuf::from("/cache").join("test.compiled_wasm");
 
         assert_eq!(file_path, expected_file_path);
 
         // should be the same when requesting it again
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
+        let file_path = cache.get_plugin_cache_item("https://plugins.dprint.dev/test.wasm").await?.file_path;
         assert_eq!(file_path, expected_file_path);
 
         // should have saved the manifest
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[{"url":"https://plugins.dprint.dev/test.wasm","file_name":"test.compiled_wasm","created_time":123456}]}"#,
+            r#"{"urls":[{"url":"https://plugins.dprint.dev/test.wasm","fileName":"test.compiled_wasm","createdTime":123456,"pluginInfo":{"name":"test-plugin","version":"0.1.0","configKeys":["test-plugin"],"fileExtensions":["txt","dat"]}}]}"#,
         );
         Ok(())
     }
@@ -164,9 +195,9 @@ mod test {
         environment.add_remote_file("https://plugins.dprint.dev/other/test.wasm", "t".as_bytes());
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test.wasm").await?;
+        let file_path = cache.get_plugin_cache_item("https://plugins.dprint.dev/test.wasm").await?.file_path;
         assert_eq!(file_path, PathBuf::from("/cache").join("test.compiled_wasm"));
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/other/test.wasm").await?;
+        let file_path = cache.get_plugin_cache_item("https://plugins.dprint.dev/other/test.wasm").await?.file_path;
         assert_eq!(file_path, PathBuf::from("/cache").join("test_2.compiled_wasm"));
         Ok(())
     }
@@ -177,7 +208,7 @@ mod test {
         environment.add_remote_file("https://plugins.dprint.dev/test", "t".as_bytes());
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
-        let file_path = cache.get_plugin_file_path("https://plugins.dprint.dev/test").await?;
+        let file_path = cache.get_plugin_cache_item("https://plugins.dprint.dev/test").await?.file_path;
         assert_eq!(file_path, PathBuf::from("/cache").join("test.compiled_wasm"));
         Ok(())
     }
@@ -188,7 +219,7 @@ mod test {
         environment.add_remote_file("testing", "t".as_bytes());
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
-        let file_path = cache.get_plugin_file_path("testing").await?;
+        let file_path = cache.get_plugin_cache_item("testing").await?.file_path;
         assert_eq!(file_path, PathBuf::from("/cache").join("temp.compiled_wasm"));
         Ok(())
     }
@@ -199,7 +230,7 @@ mod test {
         environment.add_remote_file("testing\\asdf", "t".as_bytes());
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
-        let file_path = cache.get_plugin_file_path("testing\\asdf").await?;
+        let file_path = cache.get_plugin_cache_item("testing\\asdf").await?.file_path;
         assert_eq!(file_path, PathBuf::from("/cache").join("asdf.compiled_wasm"));
         Ok(())
     }
@@ -209,7 +240,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm", "created_time": 123456 }] }"#
+            r#"{ "urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "fileName": "my-file.wasm", "createdTime": 123456 }] }"#
         ).unwrap();
 
         let mut cache = Cache::new(&environment, &identity_compile).unwrap();
@@ -226,7 +257,7 @@ mod test {
         let environment = TestEnvironment::new();
         environment.write_file(
             &environment.get_cache_dir().unwrap().join("cache-manifest.json"),
-            r#"{"urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "file_name": "my-file.wasm", "created_time": 123456 }] }"#
+            r#"{"urls": [{ "url": "https://plugins.dprint.dev/test.wasm", "fileName": "my-file.wasm", "createdTime": 123456 }] }"#
         ).unwrap();
         let wasm_file_path = environment.get_cache_dir().unwrap().join("my-file.wasm");
         environment.write_file_bytes(&wasm_file_path, "t".as_bytes()).unwrap();
@@ -243,7 +274,19 @@ mod test {
         );
     }
 
-    fn identity_compile(bytes: &[u8]) -> Result<Vec<u8>, ErrBox> {
-        Ok(bytes.to_vec())
+    fn identity_compile(bytes: &[u8]) -> Result<CompilationResult, ErrBox> {
+        Ok(CompilationResult {
+            bytes: bytes.to_vec(),
+            plugin_info: get_test_plugin_info(),
+        })
+    }
+
+    fn get_test_plugin_info() -> PluginInfo {
+        PluginInfo {
+            name: String::from("test-plugin"),
+            version: String::from("0.1.0"),
+            config_keys: vec![String::from("test-plugin")],
+            file_extensions: vec![String::from("txt"), String::from("dat")],
+        }
     }
 }
