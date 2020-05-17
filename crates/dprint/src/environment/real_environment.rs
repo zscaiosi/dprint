@@ -10,6 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use super::Environment;
 use super::super::types::ErrBox;
 
+#[derive(Clone)]
 pub struct RealEnvironment {
     output_lock: Arc<Mutex<u8>>,
 }

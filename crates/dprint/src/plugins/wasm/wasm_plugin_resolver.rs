@@ -2,41 +2,41 @@ use async_trait::async_trait;
 use crate::environment::Environment;
 use crate::types::ErrBox;
 use super::super::cache::Cache;
-use super::super::{Plugin, PluginContainer, CompileFn, PluginLoader};
+use super::super::{Plugin, Plugins, CompileFn, PluginResolver};
 use super::LazyWasmPlugin;
 
-pub struct WasmPluginLoader<'a, TEnvironment : Environment, TCompileFn : CompileFn> {
+pub struct WasmPluginResolver<'a, TEnvironment : Environment, TCompileFn : CompileFn> {
     environment: &'a TEnvironment,
     compile: &'a TCompileFn,
 }
 
 #[async_trait(?Send)]
-impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> PluginLoader for WasmPluginLoader<'a, TEnvironment, TCompileFn> {
-    async fn load_plugins(&self, urls: &Vec<String>) -> Result<PluginContainer, ErrBox> {
+impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> PluginResolver for WasmPluginResolver<'a, TEnvironment, TCompileFn> {
+    async fn resolve_plugins(&self, urls: &Vec<String>) -> Result<Plugins, ErrBox> {
         let mut cache = Cache::new(self.environment, self.compile)?;
-        let mut plugin_container = Vec::new();
+        let mut plugins = Vec::new();
 
         for url in urls.iter() {
-            let plugin = match self.load_plugin(url, &mut cache).await {
+            let plugin = match self.resolve_plugin(url, &mut cache).await {
                 Ok(plugin) => plugin,
                 Err(err) => {
                     cache.forget_url(url)?;
                     return err!("Error loading plugin at url {}: {}", url, err);
                 }
             };
-            plugin_container.push(plugin);
+            plugins.push(plugin);
         }
 
-        Ok(PluginContainer::new(plugin_container))
+        Ok(plugins)
     }
 }
 
-impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> WasmPluginLoader<'a, TEnvironment, TCompileFn> {
+impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> WasmPluginResolver<'a, TEnvironment, TCompileFn> {
     pub fn new(environment: &'a TEnvironment, compile: &'static TCompileFn) -> Self {
-        WasmPluginLoader { environment, compile }
+        WasmPluginResolver { environment, compile }
     }
 
-    async fn load_plugin(
+    async fn resolve_plugin(
         &self,
         url: &str,
         cache: &mut Cache<'a, TEnvironment, TCompileFn>,

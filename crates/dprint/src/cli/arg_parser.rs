@@ -53,7 +53,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("config")
                 .long("config")
                 .short("c")
-                .help("Path to JSON configuration file.")
+                .help("Path to JSON configuration file. Defaults to ./dprint.config.json when this is not provided.")
                 .takes_value(true),
         )
         .arg(

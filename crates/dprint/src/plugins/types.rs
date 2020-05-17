@@ -1,5 +1,8 @@
 use crate::types::ErrBox;
 use dprint_core::plugins::PluginInfo;
+use super:: Plugin;
+
+pub type Plugins = Vec<Box<dyn Plugin>>; // TOOODOOO: REMOVE
 
 #[derive(Clone)]
 pub struct CompilationResult {

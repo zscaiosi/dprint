@@ -7,6 +7,7 @@ use super::super::types::ErrBox;
 use async_trait::async_trait;
 use bytes::Bytes;
 
+#[derive(Clone)]
 pub struct TestEnvironment {
     files: Arc<Mutex<HashMap<PathBuf, Bytes>>>,
     logged_messages: Arc<Mutex<Vec<String>>>,

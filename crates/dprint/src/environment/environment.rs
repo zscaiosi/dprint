@@ -4,7 +4,7 @@ use bytes::Bytes;
 use super::super::types::ErrBox;
 
 #[async_trait]
-pub trait Environment : std::marker::Sync {
+pub trait Environment : Clone + std::marker::Send + 'static {
     fn read_file(&self, file_path: &PathBuf) -> Result<String, ErrBox>;
     fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, ErrBox>;
     fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), ErrBox>;
