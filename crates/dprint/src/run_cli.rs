@@ -1,7 +1,7 @@
-use clap::{App, Arg, Values, ArgMatches};
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use super::cli::{CliArgs, parse_args};
 use super::environment::Environment;
 use super::configuration;
 use super::configuration::{ConfigMap, ConfigMapValue};
@@ -9,35 +9,30 @@ use super::plugins::{initialize_plugins, PluginContainer, PluginLoader};
 use super::types::ErrBox;
 
 pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_loader: &impl PluginLoader) -> Result<(), ErrBox> {
-    // todo: abstract away the parsing
-    let cli_parser = create_cli_parser();
-    let matches = match cli_parser.get_matches_from_safe(args) {
-        Ok(result) => result,
-        Err(err) => return err!("{}", err.to_string()),
-    };
+    let args = parse_args(args)?;
 
-    if matches.is_present("version") {
-        return output_version(&matches, environment, plugin_loader).await;
+    if args.version {
+        return output_version(&args, environment, plugin_loader).await;
     }
 
-    if matches.is_present("init") {
+    if args.init {
         init_config_file(environment).await?;
         environment.log("Created dprint.config.json");
         return Ok(());
     }
 
-    let mut config_map = get_config_map_from_matches(&matches, environment)?;
+    let mut config_map = get_config_map_from_args(&args, environment)?;
     check_project_type_diagnostic(&mut config_map, environment);
-    let file_paths = resolve_file_paths(&mut config_map, &matches, environment)?;
+    let file_paths = resolve_file_paths(&mut config_map, &args, environment)?;
 
-    if matches.is_present("output-file-paths") {
+    if args.output_file_paths {
         output_file_paths(file_paths.iter(), environment);
         return Ok(());
     }
 
     let mut plugins = load_plugins(&mut config_map, plugin_loader).await?;
 
-    if !matches.is_present("output-resolved-config") {
+    if !args.output_resolved_config {
         let removed_plugins = plugins.remove_plugins_without_extensions(&super::utils::get_unique_extensions_from_file_paths(&file_paths));
         for plugin in removed_plugins {
             for config_key in plugin.config_keys() {
@@ -48,12 +43,12 @@ pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_l
 
     initialize_plugins(config_map, &mut plugins, environment)?;
 
-    if matches.is_present("output-resolved-config") {
+    if args.output_resolved_config {
         output_resolved_config(&plugins, environment);
         return Ok(());
     }
 
-    if matches.is_present("check") {
+    if args.check {
         check_files(environment, plugins, file_paths)?
     } else {
         format_files(environment, plugins, file_paths);
@@ -62,12 +57,12 @@ pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_l
     Ok(())
 }
 
-async fn output_version<'a>(matches: &ArgMatches<'a>, environment: &impl Environment, plugin_loader: &impl PluginLoader) -> Result<(), ErrBox> {
+async fn output_version<'a>(args: &CliArgs, environment: &impl Environment, plugin_loader: &impl PluginLoader) -> Result<(), ErrBox> {
     // log the cli's current version first
     environment.log(&format!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")));
 
     // now check for the plugins
-    match get_config_map_from_matches(matches, environment) {
+    match get_config_map_from_args(args, environment) {
         Ok(config_map) => {
             let mut config_map = config_map;
             let plugins = load_plugins(&mut config_map, plugin_loader).await?;
@@ -184,70 +179,6 @@ fn output_error(environment: &impl Environment, file_path: &PathBuf, text: &str,
     environment.log_error(&format!("{}: {}\n    {}", text, &file_path.to_string_lossy(), error));
 }
 
-fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
-    App::new("dprint")
-        .about("Format source files")
-        .long_about(
-            r#"Auto-format JavaScript, TypeScript, and JSON source code.
-
-  dprint "**/*.{ts,tsx,js,jsx,json}"
-
-  dprint --check myfile1.ts myfile2.ts
-
-  dprint --config dprint.config.json"#,
-        )
-        .arg(
-            Arg::with_name("check")
-                .long("check")
-                .help("Check if the source files are formatted.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("config")
-                .long("config")
-                .short("c")
-                .help("Path to JSON configuration file.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("file patterns")
-                .help("List of file patterns used to find files to format.")
-                .takes_value(true)
-                .multiple(true),
-        )
-        .arg(
-            Arg::with_name("allow-node-modules")
-                .long("allow-node-modules")
-                .help("Allows traversing node module directories.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("init")
-                .long("init")
-                .help("Initializes a configuration file in the current directory.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("version")
-                .short("v")
-                .long("version")
-                .help("Outputs the version.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("output-resolved-config")
-                .long("output-resolved-config")
-                .help("Outputs the resolved configuration.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("output-file-paths")
-                .long("output-file-paths")
-                .help("Outputs the resolved file paths.")
-                .takes_value(false),
-        )
-}
-
 async fn load_plugins(config_map: &mut ConfigMap, plugin_loader: &impl PluginLoader) -> Result<PluginContainer, ErrBox> {
     let plugin_urls = take_array_from_config_map(config_map, "plugins")?;
     plugin_loader.load_plugins(&plugin_urls).await
@@ -261,8 +192,8 @@ fn check_project_type_diagnostic(config_map: &mut ConfigMap, environment: &impl 
     }
 }
 
-fn deserialize_config_file(config_path: Option<&str>, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
-    let config_path = config_path.unwrap_or("./dprint.config.json");
+fn deserialize_config_file(config_path: &Option<String>, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
+    let config_path = config_path.as_ref().map(|x| x.to_owned()).unwrap_or(String::from("./dprint.config.json"));
     let config_file_text = environment.read_file(&PathBuf::from(config_path))?;
 
     let result = match configuration::deserialize_config(&config_file_text) {
@@ -273,21 +204,13 @@ fn deserialize_config_file(config_path: Option<&str>, environment: &impl Environ
     Ok(result)
 }
 
-fn resolve_file_paths(config_map: &mut ConfigMap, args: &ArgMatches, environment: &impl Environment) -> Result<Vec<PathBuf>, ErrBox> {
+fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &impl Environment) -> Result<Vec<PathBuf>, ErrBox> {
     let mut file_patterns = get_config_file_patterns(config_map)?;
-    file_patterns.extend(resolve_file_patterns_from_cli(args.values_of("file patterns")));
-    if !args.is_present("allow-node-modules") {
+    file_patterns.extend(args.file_patterns.clone());
+    if !args.allow_node_modules {
         file_patterns.push(String::from("!**/node_modules/**/*"));
     }
     return environment.glob(&file_patterns);
-
-    fn resolve_file_patterns_from_cli(cli_file_patterns: Option<Values>) -> Vec<String> {
-        if let Some(file_patterns) = cli_file_patterns {
-            file_patterns.map(std::string::ToString::to_string).collect()
-        } else {
-            Vec::new()
-        }
-    }
 
     fn get_config_file_patterns(config_map: &mut ConfigMap) -> Result<Vec<String>, ErrBox> {
         let mut patterns = Vec::new();
@@ -301,8 +224,8 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &ArgMatches, environment
     }
 }
 
-fn get_config_map_from_matches(matches: &ArgMatches, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
-    deserialize_config_file(matches.value_of("config"), environment)
+fn get_config_map_from_args(args: &CliArgs, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
+    deserialize_config_file(&args.config, environment)
 }
 
 // todo: move somewhere else (maybe make a wrapper around ConfigMap)

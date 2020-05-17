@@ -3,6 +3,7 @@ use environment::{Environment, RealEnvironment};
 #[macro_use]
 mod types;
 
+mod cli;
 mod configuration;
 mod environment;
 mod run_cli;
