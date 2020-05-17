@@ -5,14 +5,14 @@ use crate::configuration::{ConfigMap, ConfigMapValue};
 use crate::types::ErrBox;
 use super::PluginContainer;
 
-pub fn initialize_plugins(config_map: ConfigMap, plugins: &PluginContainer, environment: &impl Environment) -> Result<(), ErrBox> {
-    match inner_initialize(config_map, &plugins, environment) {
+pub fn initialize_plugins(config_map: ConfigMap, plugins: &mut PluginContainer, environment: &impl Environment) -> Result<(), ErrBox> {
+    match inner_initialize(config_map, plugins, environment) {
         Ok(()) => Ok(()),
         Err(err) => err!("Error initializing from configuration file. {}", err)
     }
 }
 
-fn inner_initialize(config_map: ConfigMap, plugins: &PluginContainer, environment: &impl Environment) -> Result<(), String> {
+fn inner_initialize(config_map: ConfigMap, plugins: &mut PluginContainer, environment: &impl Environment) -> Result<(), ErrBox> {
     let mut config_map = config_map;
 
     // get hashmaps per plugin
@@ -32,8 +32,8 @@ fn inner_initialize(config_map: ConfigMap, plugins: &PluginContainer, environmen
     }
 
     // intiailize the plugins
-    for plugin in plugins.iter() {
-        plugin.initialize(plugins_to_config.remove(&plugin.name()).unwrap_or(HashMap::new()), &global_config_result.config);
+    for plugin in plugins.iter_mut() {
+        plugin.initialize(plugins_to_config.remove(plugin.name()).unwrap_or(HashMap::new()), &global_config_result.config)?;
 
         for diagnostic in plugin.get_config_diagnostics() {
             environment.log_error(&format!("[{}]: {}", plugin.name(), diagnostic.message));
@@ -42,7 +42,7 @@ fn inner_initialize(config_map: ConfigMap, plugins: &PluginContainer, environmen
     }
 
     if diagnostic_count > 0 {
-        Err(format!("Had {} diagnostic(s).", diagnostic_count))
+        err!("Had {} diagnostic(s).", diagnostic_count)
     } else {
         Ok(())
     }
@@ -57,7 +57,7 @@ fn handle_plugins_to_config_map(
         let mut key_name = None;
         let config_keys = plugin.config_keys();
         for config_key in config_keys {
-            if config_map.contains_key(&config_key) {
+            if config_map.contains_key(config_key) {
                 if let Some(key_name) = key_name {
                     return Err(format!("Cannot specify both the '{}' and '{}' configurations for {}.", key_name, config_key, plugin.name()));
                 } else {
@@ -66,9 +66,9 @@ fn handle_plugins_to_config_map(
             }
         }
         if let Some(key_name) = key_name {
-            let plugin_config_map = config_map.remove(&key_name).unwrap();
+            let plugin_config_map = config_map.remove(key_name).unwrap();
             if let ConfigMapValue::HashMap(plugin_config_map) = plugin_config_map {
-                plugin_maps.insert(plugin.name(), plugin_config_map);
+                plugin_maps.insert(String::from(plugin.name()), plugin_config_map);
             } else {
                 return Err(format!("Expected the configuration property '{}' to be an object.", key_name));
             }
@@ -192,14 +192,14 @@ mod tests {
 
     fn assert_creates(config_map: ConfigMap) {
         let test_environment = TestEnvironment::new();
-        let plugin_container = create_plugin_container(vec![create_plugin()]);
-        assert_eq!(initialize_plugins(config_map, &plugin_container, &test_environment).is_ok(), true);
+        let mut plugin_container = create_plugin_container(vec![create_plugin()]);
+        assert_eq!(initialize_plugins(config_map, &mut plugin_container, &test_environment).is_ok(), true);
     }
 
     fn assert_errors(config_map: ConfigMap, logged_errors: Vec<&'static str>, message: &str, plugins: Vec<TestPlugin>) {
         let test_environment = TestEnvironment::new();
-        let plugin_container = create_plugin_container(plugins);
-        let result = initialize_plugins(config_map, &plugin_container, &test_environment);
+        let mut plugin_container = create_plugin_container(plugins);
+        let result = initialize_plugins(config_map, &mut plugin_container, &test_environment);
         assert_eq!(result.err().unwrap().to_string(), message);
         assert_eq!(test_environment.get_logged_errors(), logged_errors);
     }

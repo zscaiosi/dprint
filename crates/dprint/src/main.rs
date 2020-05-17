@@ -7,6 +7,7 @@ mod configuration;
 mod environment;
 mod run_cli;
 mod plugins;
+mod utils;
 
 #[cfg(test)]
 #[macro_use]

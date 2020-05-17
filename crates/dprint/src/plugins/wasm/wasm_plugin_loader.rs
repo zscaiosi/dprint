@@ -3,7 +3,7 @@ use crate::environment::Environment;
 use crate::types::ErrBox;
 use super::super::cache::Cache;
 use super::super::{Plugin, PluginContainer, CompileFn, PluginLoader};
-use super::WasmPlugin;
+use super::LazyWasmPlugin;
 
 pub struct WasmPluginLoader<'a, TEnvironment : Environment, TCompileFn : CompileFn> {
     environment: &'a TEnvironment,
@@ -57,6 +57,6 @@ impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> WasmPluginLoader<'a
             }
         };
 
-        Ok(Box::new(WasmPlugin::new(&file_bytes)?))
+        Ok(Box::new(LazyWasmPlugin::new(file_bytes, cache_item.info)))
     }
 }

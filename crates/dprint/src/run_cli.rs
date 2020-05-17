@@ -9,6 +9,7 @@ use super::plugins::{initialize_plugins, PluginContainer, PluginLoader};
 use super::types::ErrBox;
 
 pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_loader: &impl PluginLoader) -> Result<(), ErrBox> {
+    // todo: abstract away the parsing
     let cli_parser = create_cli_parser();
     let matches = match cli_parser.get_matches_from_safe(args) {
         Ok(result) => result,
@@ -34,8 +35,18 @@ pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_l
         return Ok(());
     }
 
-    let plugins = load_plugins(&mut config_map, plugin_loader).await?;
-    initialize_plugins(config_map, &plugins, environment)?;
+    let mut plugins = load_plugins(&mut config_map, plugin_loader).await?;
+
+    if !matches.is_present("output-resolved-config") {
+        let removed_plugins = plugins.remove_plugins_without_extensions(&super::utils::get_unique_extensions_from_file_paths(&file_paths));
+        for plugin in removed_plugins {
+            for config_key in plugin.config_keys() {
+                config_map.remove(config_key);
+            }
+        }
+    }
+
+    initialize_plugins(config_map, &mut plugins, environment)?;
 
     if matches.is_present("output-resolved-config") {
         output_resolved_config(&plugins, environment);
@@ -449,7 +460,6 @@ mod tests {
         assert_eq!(environment.read_file(&file_path1).unwrap(), "text_custom-formatted");
     }
 
-
     #[tokio::test]
     async fn it_should_error_on_plugin_config_diagnostic() {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
@@ -458,12 +468,30 @@ mod tests {
             "test-plugin": { "non-existent": 25 },
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
+        environment.write_file(&PathBuf::from("/test.txt"), "test").unwrap();
 
         let error_message = run_test_cli(vec!["**/*.txt"], &environment).await.err().unwrap();
 
         assert_eq!(error_message.to_string(), "Error initializing from configuration file. Had 1 diagnostic(s).");
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors(), vec!["[test-plugin]: Unknown property in configuration: non-existent"]);
+    }
+
+    #[tokio::test]
+    async fn it_should_not_error_on_plugin_config_diagnostic_when_no_files_to_format() {
+        // It shouldn't error here because plugins are lazily loaded, so it's not going to
+        // load the plugin to check the config diagnostics.
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "test-plugin": { "non-existent": 25 },
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+
+        run_test_cli(vec!["**/*.txt"], &environment).await.unwrap();
+
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
     #[tokio::test]

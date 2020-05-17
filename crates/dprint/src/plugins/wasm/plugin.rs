@@ -4,10 +4,74 @@ use dprint_core::plugins::PluginInfo;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+use bytes::Bytes;
 
 use crate::types::ErrBox;
 use super::super::Plugin;
 use super::{BytesTransmitter, WasmFunctions, FormatResult, load_instance};
+
+/// A lazily created wasm plugin.
+pub struct LazyWasmPlugin {
+    compiled_wasm_bytes: Option<Bytes>,
+    plugin_info: PluginInfo,
+    wasm_plugin: Option<WasmPlugin>,
+}
+
+impl LazyWasmPlugin {
+    pub fn new(compiled_wasm_bytes: Bytes, plugin_info: PluginInfo) -> LazyWasmPlugin {
+        LazyWasmPlugin {
+            compiled_wasm_bytes: Some(compiled_wasm_bytes),
+            plugin_info,
+            wasm_plugin: None,
+        }
+    }
+
+    pub fn get_wasm_plugin(&self) -> &WasmPlugin {
+        self.wasm_plugin.as_ref().expect("Expected WASM plugin to be initialized.")
+    }
+}
+
+impl Plugin for LazyWasmPlugin {
+    fn name(&self) -> &str {
+        &self.plugin_info.name
+    }
+
+    fn version(&self) -> &str {
+        &self.plugin_info.version
+    }
+
+    fn config_keys(&self) -> &Vec<String> {
+        &self.plugin_info.config_keys
+    }
+
+    fn file_extensions(&self) -> &Vec<String> {
+        &self.plugin_info.file_extensions
+    }
+
+    fn initialize(&mut self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) -> Result<(), ErrBox> {
+        let wasm_bytes = self.compiled_wasm_bytes.take().unwrap(); // free memory
+        let wasm_plugin = WasmPlugin::new(&wasm_bytes)?;
+
+        wasm_plugin.set_global_config(global_config);
+        wasm_plugin.set_plugin_config(&plugin_config);
+
+        self.wasm_plugin.replace(wasm_plugin);
+
+        Ok(())
+    }
+
+    fn get_resolved_config(&self) -> String {
+        self.get_wasm_plugin().get_resolved_config()
+    }
+
+    fn get_config_diagnostics(&self) -> Vec<ConfigurationDiagnostic> {
+        self.get_wasm_plugin().get_config_diagnostics()
+    }
+
+    fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<String, String> {
+        self.get_wasm_plugin().format_text(file_path, file_text)
+    }
+}
 
 pub struct WasmPlugin {
     wasm_functions: Rc<WasmFunctions>,
@@ -84,45 +148,5 @@ impl WasmPlugin {
                 Err(self.bytes_transmitter.receive_string(len))
             }
         }
-    }
-}
-
-impl Plugin for WasmPlugin {
-    fn name(&self) -> String {
-        self.get_plugin_info().name
-    }
-
-    fn version(&self) -> String {
-        self.get_plugin_info().version
-    }
-
-    fn config_keys(&self) -> Vec<String> {
-        self.get_plugin_info().config_keys
-    }
-
-    fn initialize(&self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) {
-        self.set_global_config(global_config);
-        self.set_plugin_config(&plugin_config);
-    }
-
-    fn should_format_file(&self, file_path: &PathBuf) -> bool {
-        if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
-            let ext = String::from(ext).to_lowercase();
-            self.get_plugin_info().file_extensions.contains(&ext)
-        } else {
-            false
-        }
-
-    }
-    fn get_resolved_config(&self) -> String {
-        self.get_resolved_config()
-    }
-
-    fn get_config_diagnostics(&self) -> Vec<ConfigurationDiagnostic> {
-        self.get_config_diagnostics()
-    }
-
-    fn format_text(&self, file_path: &PathBuf, file_text: &str) -> Result<String, String> {
-        self.format_text(file_path, file_text)
     }
 }

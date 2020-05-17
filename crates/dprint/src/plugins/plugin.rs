@@ -2,17 +2,19 @@ use dprint_core::configuration::{ConfigurationDiagnostic, GlobalConfiguration};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::types::ErrBox;
+
 pub trait Plugin {
     /// The name of the plugin.
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
     /// The version of the plugin.
-    fn version(&self) -> String;
+    fn version(&self) -> &str;
     /// Gets the possible keys that can be used in the configuration JSON.
-    fn config_keys(&self) -> Vec<String>;
+    fn config_keys(&self) -> &Vec<String>;
+    /// Gets the file extensions.
+    fn file_extensions(&self) -> &Vec<String>;
     /// Initializes the plugin.
-    fn initialize(&self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration);
-    /// Gets whether the specified file should be formatted.
-    fn should_format_file(&self, file_path: &PathBuf) -> bool;
+    fn initialize(&mut self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) -> Result<(), ErrBox>;
     /// Gets the configuration as a collection of key value pairs.
     fn get_resolved_config(&self) -> String;
     /// Gets the configuration diagnostics.
@@ -50,17 +52,12 @@ impl TestPlugin {
 
 #[cfg(test)]
 impl Plugin for TestPlugin {
-    fn name(&self) -> String { String::from(self.name) }
-    fn version(&self) -> String { String::from("1.0.0") }
-    fn config_keys(&self) -> Vec<String> { self.config_keys.clone() }
-    fn initialize(&self, _: HashMap<String, String>, _: &GlobalConfiguration) { }
-    fn should_format_file(&self, file_path: &PathBuf) -> bool {
-        if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
-            let ext = String::from(ext).to_lowercase();
-            self.file_extensions.contains(&ext)
-        } else {
-            false
-        }
+    fn name(&self) -> &str { &self.name }
+    fn version(&self) -> &str { "1.0.0" }
+    fn config_keys(&self) -> &Vec<String> { &self.config_keys }
+    fn file_extensions(&self) -> &Vec<String> { &self.file_extensions }
+    fn initialize(&mut self, _: HashMap<String, String>, _: &GlobalConfiguration) -> Result<(), ErrBox> {
+        Ok(())
     }
     fn get_resolved_config(&self) -> String {
         String::from("{}")
