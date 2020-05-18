@@ -1,4 +1,4 @@
-use environment::{Environment, RealEnvironment};
+use environment::RealEnvironment;
 
 #[macro_use]
 mod types;
