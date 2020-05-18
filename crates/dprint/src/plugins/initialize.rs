@@ -21,7 +21,7 @@ pub fn initialize_plugin(
     }
 
     if diagnostic_count > 0 {
-        err!("Had {} config diagnostic(s) for {}.", diagnostic_count, plugin.name())
+        err!("Error initializing from configuration file. Had {} diagnostic(s).", diagnostic_count)
     } else {
         Ok(initialized_plugin)
     }

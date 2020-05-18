@@ -6,7 +6,7 @@ use dprint_core::configuration::GlobalConfiguration;
 use super::{CliArgs, parse_args, FormatContext, FormatContexts};
 use crate::environment::Environment;
 use crate::configuration::{self, ConfigMap, ConfigMapValue, get_global_config, get_plugin_config_map};
-use crate::plugins::{initialize_plugin, Plugin, PluginResolver};
+use crate::plugins::{initialize_plugin, Plugin, InitializedPlugin, PluginResolver};
 use crate::types::ErrBox;
 
 struct PluginWithConfig {
@@ -147,41 +147,16 @@ async fn init_config_file(environment: &impl Environment) -> Result<(), ErrBox> 
 async fn check_files(format_contexts: FormatContexts, global_config: GlobalConfiguration, environment: &impl Environment) -> Result<(), ErrBox> {
     let not_formatted_files_count = Arc::new(AtomicUsize::new(0));
 
-    let handles = format_contexts.into_iter().map(|format_context| {
-        let environment = environment.to_owned();
-        let global_config = global_config.to_owned();
+    run_parallelized(format_contexts, global_config, environment, {
         let not_formatted_files_count = not_formatted_files_count.clone();
-        tokio::task::spawn_blocking(move || {
-            let initialized_plugin = initialize_plugin(
-                format_context.plugin,
-                format_context.config,
-                &global_config,
-                &environment,
-            ).expect("Error."); // todo...
-            for file_path in format_context.file_paths {
-                let file_contents = environment.read_file(&file_path);
-                match file_contents {
-                    Ok(file_contents) => {
-                        match initialized_plugin.format_text(&file_path, &file_contents) {
-                            Ok(formatted_text) => {
-                                if formatted_text != file_contents {
-                                    not_formatted_files_count.fetch_add(1, Ordering::SeqCst);
-                                }
-                            },
-                            Err(e) => {
-                                output_error(&environment, &file_path, "Error checking", &e);
-                            },
-                        }
-                    }
-                    Err(e) => {
-                        output_error(&environment, &file_path, "Error reading file", &e);
-                    }
-                }
+        move |plugin, file_path, file_text, _| {
+            let formatted_text = plugin.format_text(&file_path, &file_text)?;
+            if formatted_text != file_text {
+                not_formatted_files_count.fetch_add(1, Ordering::SeqCst);
             }
-        })
-    });
-
-    futures::future::try_join_all(handles).await?;
+            Ok(())
+        }
+    }).await?;
 
     let not_formatted_files_count = not_formatted_files_count.load(Ordering::SeqCst);
     if not_formatted_files_count == 0 {
@@ -196,46 +171,17 @@ async fn format_files(format_contexts: FormatContexts, global_config: GlobalConf
     let formatted_files_count = Arc::new(AtomicUsize::new(0));
     let files_count: usize = format_contexts.iter().map(|x| x.file_paths.len()).sum();
 
-    let handles = format_contexts.into_iter().map(|format_context| {
-        let environment = environment.to_owned();
-        let global_config = global_config.to_owned();
+    run_parallelized(format_contexts, global_config, environment, {
         let formatted_files_count = formatted_files_count.clone();
-        tokio::task::spawn_blocking(move || {
-            let initialized_plugin = initialize_plugin(
-                format_context.plugin,
-                format_context.config,
-                &global_config,
-                &environment,
-            ).expect("Error."); // todo...
-            for file_path in format_context.file_paths {
-                let file_contents = environment.read_file(&file_path);
-                match file_contents {
-                    Ok(file_contents) => {
-                        match initialized_plugin.format_text(&file_path, &file_contents) {
-                            Ok(formatted_text) => {
-                                if formatted_text != file_contents {
-                                    match environment.write_file(&file_path, &formatted_text) {
-                                        Ok(_) => {
-                                            formatted_files_count.fetch_add(1, Ordering::SeqCst);
-                                        },
-                                        Err(e) => output_error(&environment, &file_path, "Error writing file", &e),
-                                    };
-                                }
-                            },
-                            Err(e) => {
-                                output_error(&environment, &file_path, "Error formatting", &e);
-                            },
-                        }
-                    }
-                    Err(e) => {
-                        output_error(&environment, &file_path, "Error reading file", &e);
-                    }
-                }
+        move |plugin, file_path, file_text, environment| {
+            let formatted_text = plugin.format_text(&file_path, &file_text)?;
+            if formatted_text != file_text {
+                environment.write_file(&file_path, &formatted_text)?;
+                formatted_files_count.fetch_add(1, Ordering::SeqCst);
             }
-        })
-    });
-
-    futures::future::try_join_all(handles).await?;
+            Ok(())
+        }
+    }).await?;
 
     let formatted_files_count = formatted_files_count.load(Ordering::SeqCst);
     if formatted_files_count > 0 {
@@ -246,8 +192,72 @@ async fn format_files(format_contexts: FormatContexts, global_config: GlobalConf
     Ok(())
 }
 
-fn output_error(environment: &impl Environment, file_path: &PathBuf, text: &str, error: &impl std::fmt::Display) {
-    environment.log_error(&format!("{}: {}\n    {}", text, &file_path.to_string_lossy(), error));
+async fn run_parallelized<F, TEnvironment : Environment>(
+    format_contexts: FormatContexts,
+    global_config: GlobalConfiguration,
+    environment: &TEnvironment,
+    f: F,
+) -> Result<(), ErrBox> where F: Fn(&Box<dyn InitializedPlugin>, &PathBuf, String, &TEnvironment) -> Result<(), ErrBox> + Send + 'static + Clone {
+    // At the moment this is parallelized across plugins because Wasmer instances can't be shared or sent between threads.
+    let error_count = Arc::new(AtomicUsize::new(0));
+    let handles = format_contexts.into_iter().map(|format_context| {
+        let environment = environment.to_owned();
+        let global_config = global_config.to_owned();
+        let f = f.clone();
+        let error_count = error_count.clone();
+        tokio::task::spawn_blocking(move || {
+            let plugin_name = String::from(format_context.plugin.name());
+            let result = inner_run(format_context, global_config, &environment, f);
+            if let Err(err) = result {
+                environment.log_error(&format!("[{}]: {}", plugin_name, err.to_string()));
+                error_count.fetch_add(1, Ordering::SeqCst);
+            }
+        })
+    });
+
+    futures::future::try_join_all(handles).await?;
+
+    let error_count = error_count.load(Ordering::SeqCst);
+    return if error_count == 0 {
+        Ok(())
+    } else {
+        err!("Had {0} error(s) formatting.", error_count)
+    };
+
+    #[inline]
+    fn inner_run<F, TEnvironment : Environment>(
+        format_context: FormatContext,
+        global_config: GlobalConfiguration,
+        environment: &TEnvironment,
+        f: F
+    ) -> Result<(), ErrBox> where F: Fn(&Box<dyn InitializedPlugin>, &PathBuf, String, &TEnvironment) -> Result<(), ErrBox> + Send + 'static + Clone {
+        let initialized_plugin = initialize_plugin(
+            format_context.plugin,
+            format_context.config,
+            &global_config,
+            environment,
+        )?;
+
+        for file_path in format_context.file_paths {
+            match run_for_file_path(&file_path, environment, &initialized_plugin, &f) {
+                Ok(_) => {},
+                Err(err) => return err!("Error formatting {}. Message: {}", file_path.to_string_lossy(), err.to_string()),
+            }
+        }
+
+        return Ok(());
+    }
+
+    #[inline]
+    fn run_for_file_path<F, TEnvironment : Environment>(
+        file_path: &PathBuf,
+        environment: &TEnvironment,
+        initialized_plugin: &Box<dyn InitializedPlugin>,
+        f: &F
+    ) -> Result<(), ErrBox> where F: Fn(&Box<dyn InitializedPlugin>, &PathBuf, String, &TEnvironment) -> Result<(), ErrBox> + Send + 'static + Clone {
+        let file_text = environment.read_file(&file_path)?;
+        f(initialized_plugin, &file_path, file_text, &environment)
+    }
 }
 
 async fn resolve_plugins(config_map: &mut ConfigMap, plugin_resolver: &impl PluginResolver) -> Result<Vec<PluginWithConfig>, ErrBox> {
@@ -501,9 +511,12 @@ mod tests {
 
         let error_message = run_test_cli(vec!["**/*.txt"], &environment).await.err().unwrap();
 
-        assert_eq!(error_message.to_string(), "Error initializing from configuration file. Had 1 diagnostic(s).");
+        assert_eq!(error_message.to_string(), "Had 1 error(s) formatting.");
         assert_eq!(environment.get_logged_messages().len(), 0);
-        assert_eq!(environment.get_logged_errors(), vec!["[test-plugin]: Unknown property in configuration: non-existent"]);
+        assert_eq!(environment.get_logged_errors(), vec![
+            "[test-plugin]: Unknown property in configuration: non-existent",
+            "[test-plugin]: Error initializing from configuration file. Had 1 diagnostic(s)."
+        ]);
     }
 
     #[tokio::test]
