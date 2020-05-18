@@ -9,7 +9,7 @@ repository = "https://github.com/dprint/dprint"
 
 [dependencies]
 clap = "2.33.0"
-dprint-core = { path = "../core", version = "0.19.1" }
+dprint-core = { path = "../core", version = "0.20.0-alpha" }
 globwalk = "0.8.0"
 jsonc-parser = { version = "0.7.0" }
 indicatif = "0.14.0"
