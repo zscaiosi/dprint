@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use crate::environment::Environment;
 use crate::types::ErrBox;
 use super::super::cache::Cache;
-use super::super::{Plugin, Plugins, CompileFn, PluginResolver};
+use super::super::{Plugin, CompileFn, PluginResolver};
 use super::WasmPlugin;
 
 pub struct WasmPluginResolver<'a, TEnvironment : Environment, TCompileFn : CompileFn> {
@@ -12,7 +12,7 @@ pub struct WasmPluginResolver<'a, TEnvironment : Environment, TCompileFn : Compi
 
 #[async_trait(?Send)]
 impl<'a, TEnvironment : Environment, TCompileFn : CompileFn> PluginResolver for WasmPluginResolver<'a, TEnvironment, TCompileFn> {
-    async fn resolve_plugins(&self, urls: &Vec<String>) -> Result<Plugins, ErrBox> {
+    async fn resolve_plugins(&self, urls: &Vec<String>) -> Result<Vec<Box<dyn Plugin>>, ErrBox> {
         let mut cache = Cache::new(self.environment, self.compile)?;
         let mut plugins = Vec::new();
 

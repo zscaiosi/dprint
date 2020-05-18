@@ -59,31 +59,19 @@ impl Plugin for TestPlugin {
 
 #[cfg(test)]
 pub struct InitializedTestPlugin {
-    diagnostics: Vec<ConfigurationDiagnostic>,
 }
 
 #[cfg(test)]
 impl InitializedTestPlugin {
     pub fn new() -> InitializedTestPlugin {
-        InitializedTestPlugin {
-            diagnostics: vec![],
-        }
-    }
-
-    pub fn set_diagnostics(&mut self, diagnostics: Vec<(&'static str, &'static str)>) {
-        self.diagnostics = diagnostics.into_iter().map(|(property_name, message)| ConfigurationDiagnostic {
-            property_name: String::from(property_name),
-            message: String::from(message),
-        }).collect()
+        InitializedTestPlugin {}
     }
 }
 
 #[cfg(test)]
 impl InitializedPlugin for InitializedTestPlugin {
-    fn get_resolved_config(&self) -> String {
-        String::from("{}")
-    }
-    fn get_config_diagnostics(&self) -> Vec<ConfigurationDiagnostic> { self.diagnostics.clone() }
+    fn get_resolved_config(&self) -> String { String::from("{}") }
+    fn get_config_diagnostics(&self) -> Vec<ConfigurationDiagnostic> { vec![] }
     fn format_text(&self, _: &PathBuf, text: &str) -> Result<String, String> {
         Ok(format!("{}_formatted", text))
     }
