@@ -7,7 +7,7 @@ pub struct CliArgs {
     pub output_file_paths: bool,
     pub output_resolved_config: bool,
     pub allow_node_modules: bool,
-    pub check: bool,
+    pub write: bool,
     pub config: Option<String>,
     pub file_patterns: Vec<String>,
 }
@@ -24,7 +24,7 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
         init: matches.is_present("init"),
         output_file_paths: matches.is_present("output-file-paths"),
         output_resolved_config: matches.is_present("output-resolved-config"),
-        check: matches.is_present("check"),
+        write: matches.is_present("write"),
         allow_node_modules: matches.is_present("allow-node-modules"),
         config: matches.value_of("config").map(String::from),
         file_patterns: matches.values_of("file patterns").map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new()),
@@ -37,23 +37,32 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .long_about(
             r#"Auto-format JavaScript, TypeScript, and JSON source code.
 
-  dprint "**/*.{ts,tsx,js,jsx,json}"
+  # create a dprint.config.json file
+  dprint --init
 
-  dprint --check myfile1.ts myfile2.ts
+  # check formatting
+  dprint
 
-  dprint --config dprint.config.json"#,
+  # write formatted files to file system
+  dprint --write
+
+  # specify path to config file other than the default ./dprint.config.json
+  dprint --config configs/dprint.config.json
+
+  # write using the specified config and file paths
+  dprint --write --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#,
         )
         .arg(
-            Arg::with_name("check")
-                .long("check")
-                .help("Check if the source files are formatted.")
+            Arg::with_name("write")
+                .long("write")
+                .help("Writes the formatted files to the file system.")
                 .takes_value(false),
         )
         .arg(
             Arg::with_name("config")
                 .long("config")
                 .short("c")
-                .help("Path to JSON configuration file. Defaults to ./dprint.config.json when this is not provided.")
+                .help("Path to JSON configuration file. Defaults to ./dprint.config.json when not provided.")
                 .takes_value(true),
         )
         .arg(
@@ -65,7 +74,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .arg(
             Arg::with_name("allow-node-modules")
                 .long("allow-node-modules")
-                .help("Allows traversing node module directories.")
+                .help("Allows traversing node module directories (unstable - This flag will be renamed to be non-node specific in the future).")
                 .takes_value(false),
         )
         .arg(

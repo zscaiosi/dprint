@@ -45,10 +45,10 @@ pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_r
 
     let format_contexts = get_plugin_format_contexts(plugins, file_paths);
 
-    if args.check {
-        check_files(format_contexts, global_config, environment).await
-    } else {
+    if args.write {
         format_files(format_contexts, global_config, environment).await
+    } else {
+        check_files(format_contexts, global_config, environment).await
     }
 }
 
@@ -414,7 +414,7 @@ mod tests {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         let file_path = PathBuf::from("/file.txt");
         environment.write_file(&file_path, "text").unwrap();
-        run_test_cli(vec!["/file.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "/file.txt"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
         assert_eq!(environment.read_file(&file_path).unwrap(), "text_formatted");
@@ -425,7 +425,7 @@ mod tests {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("/node_modules/file.txt"), "").unwrap();
         environment.write_file(&PathBuf::from("/test/node_modules/file.txt"), "").unwrap();
-        run_test_cli(vec!["**/*.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "**/*.txt"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
@@ -435,7 +435,7 @@ mod tests {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("/node_modules/file.txt"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/test/node_modules/file.txt"), "const t=4;").unwrap();
-        run_test_cli(vec!["--allow-node-modules", "**/*.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "--allow-node-modules", "**/*.txt"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
@@ -455,7 +455,7 @@ mod tests {
         environment.write_file(&file_path1, "text").unwrap();
         environment.write_file(&file_path2, "text2").unwrap();
 
-        run_test_cli(vec!["--config", "/config.json", "/file1.txt", "/file2.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "--config", "/config.json", "/file1.txt", "/file2.txt"], &environment).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -474,7 +474,7 @@ mod tests {
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
 
-        run_test_cli(vec!["-c", "/config.json", "/file1.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "-c", "/config.json", "/file1.txt"], &environment).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -486,7 +486,7 @@ mod tests {
         let environment = TestEnvironment::new();
         environment.write_file(&PathBuf::from("/test.txt"), "test").unwrap();
 
-        let error_message = run_test_cli(vec!["**/*.txt"], &environment).await.err().unwrap();
+        let error_message = run_test_cli(vec!["--write", "**/*.txt"], &environment).await.err().unwrap();
 
         assert_eq!(
             error_message.to_string(),
@@ -509,7 +509,7 @@ mod tests {
         }"#).unwrap();
         environment.write_file(&PathBuf::from("/test.txt"), "test").unwrap();
 
-        let error_message = run_test_cli(vec!["**/*.txt"], &environment).await.err().unwrap();
+        let error_message = run_test_cli(vec!["--write", "**/*.txt"], &environment).await.err().unwrap();
 
         assert_eq!(error_message.to_string(), "Had 1 error(s) formatting.");
         assert_eq!(environment.get_logged_messages().len(), 0);
@@ -530,7 +530,7 @@ mod tests {
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
 
-        run_test_cli(vec!["**/*.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "**/*.txt"], &environment).await.unwrap();
 
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -549,7 +549,7 @@ mod tests {
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
 
-        run_test_cli(vec![], &environment).await.unwrap();
+        run_test_cli(vec!["--write"], &environment).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 2 files."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -571,7 +571,7 @@ mod tests {
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
 
-        run_test_cli(vec![], &environment).await.unwrap();
+        run_test_cli(vec!["--write"], &environment).await.unwrap();
 
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -586,7 +586,7 @@ mod tests {
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
         environment.write_file(&PathBuf::from("/file1.txt"), "text1_formatted").unwrap();
-        run_test_cli(vec!["/file1.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "/file1.txt"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 1);
         assert_eq!(environment.get_logged_errors()[0].find("The 'projectType' property").is_some(), true);
@@ -596,7 +596,7 @@ mod tests {
     async fn it_should_not_output_when_no_files_need_formatting() {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("/file.txt"), "text_formatted").unwrap();
-        run_test_cli(vec!["/file.txt"], &environment).await.unwrap();
+        run_test_cli(vec!["--write", "/file.txt"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
@@ -606,7 +606,7 @@ mod tests {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         let file_path = PathBuf::from("/file.txt");
         environment.write_file(&file_path, "text_formatted").unwrap();
-        run_test_cli(vec!["--check", "/file.ts"], &environment).await.unwrap();
+        run_test_cli(vec!["/file.ts"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
@@ -615,7 +615,7 @@ mod tests {
     async fn it_should_output_when_a_file_need_formatting_for_check() {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("/file.txt"), "const t=4;").unwrap();
-        let error_message = run_test_cli(vec!["--check", "/file.txt"], &environment).await.err().unwrap();
+        let error_message = run_test_cli(vec!["/file.txt"], &environment).await.err().unwrap();
         assert_eq!(error_message.to_string(), "Found 1 not formatted file.");
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
@@ -627,7 +627,7 @@ mod tests {
         environment.write_file(&PathBuf::from("/file1.txt"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/file2.txt"), "const t=4;").unwrap();
 
-        let error_message = run_test_cli(vec!["--check", "/file1.txt", "/file2.txt"], &environment).await.err().unwrap();
+        let error_message = run_test_cli(vec!["/file1.txt", "/file2.txt"], &environment).await.err().unwrap();
         assert_eq!(error_message.to_string(), "Found 2 not formatted files.");
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
