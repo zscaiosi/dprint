@@ -288,7 +288,7 @@ fn deserialize_config_file(config_path: &Option<String>, environment: &impl Envi
     let config_file_text = match environment.read_file(&config_path) {
         Ok(file_text) => file_text,
         Err(err) => return err!(
-            "No config file found at {}. Did you mean to create one? (Run: dprint --init) -- Error: {}",
+            "No config file found at {}. Did you mean to create (dprint --init) or specify one (dprint --config <path>)?\n  Error: {}",
             config_path.to_string_lossy(),
             err.to_string(),
         ),
@@ -491,8 +491,8 @@ mod tests {
         assert_eq!(
             error_message.to_string(),
             concat!(
-                "No config file found at ./dprint.config.json. Did you mean to create one? (Run: dprint --init) -- ",
-                "Error: Could not find file at path ./dprint.config.json"
+                "No config file found at ./dprint.config.json. Did you mean to create (dprint --init) or specify one (dprint --config <path>)?\n",
+                "  Error: Could not find file at path ./dprint.config.json"
             )
         );
         assert_eq!(environment.get_logged_messages().len(), 0);

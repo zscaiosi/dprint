@@ -21,7 +21,7 @@ async fn main() -> Result<(), types::ErrBox> {
 
     match cli::run_cli(args, &environment, &plugin_resolver).await {
         Err(err) => {
-            environment.log_error(&format!("{:?}", err));
+            environment.log_error(&err.to_string());
             std::process::exit(1);
         },
         _ => Ok(()),
