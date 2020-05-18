@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use dprint_core::configuration::{ConfigurationDiagnostic, GlobalConfiguration};
 use dprint_core::plugins::{PluginInfo};
 use std::collections::HashMap;
@@ -10,22 +9,21 @@ use crate::types::ErrBox;
 use super::super::{Plugin, InitializedPlugin};
 use super::{BytesTransmitter, WasmFunctions, FormatResult, load_instance};
 
-// todo: rename this structs
-pub struct LazyWasmPlugin {
+pub struct WasmPlugin {
     compiled_wasm_bytes: Option<Bytes>,
     plugin_info: PluginInfo,
 }
 
-impl LazyWasmPlugin {
-    pub fn new(compiled_wasm_bytes: Bytes, plugin_info: PluginInfo) -> LazyWasmPlugin {
-        LazyWasmPlugin {
+impl WasmPlugin {
+    pub fn new(compiled_wasm_bytes: Bytes, plugin_info: PluginInfo) -> WasmPlugin {
+        WasmPlugin {
             compiled_wasm_bytes: Some(compiled_wasm_bytes),
             plugin_info,
         }
     }
 }
 
-impl Plugin for LazyWasmPlugin {
+impl Plugin for WasmPlugin {
     fn name(&self) -> &str {
         &self.plugin_info.name
     }
@@ -44,7 +42,7 @@ impl Plugin for LazyWasmPlugin {
 
     fn initialize(&mut self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) -> Result<Box<dyn InitializedPlugin>, ErrBox> {
         let wasm_bytes = self.compiled_wasm_bytes.take().expect("Cannot initialize a plugin twice."); // free memory
-        let wasm_plugin = WasmPlugin::new(&wasm_bytes)?;
+        let wasm_plugin = InitializedWasmPlugin::new(&wasm_bytes)?;
 
         wasm_plugin.set_global_config(global_config);
         wasm_plugin.set_plugin_config(&plugin_config);
@@ -53,18 +51,18 @@ impl Plugin for LazyWasmPlugin {
     }
 }
 
-pub struct WasmPlugin {
+pub struct InitializedWasmPlugin {
     wasm_functions: Rc<WasmFunctions>,
     bytes_transmitter: BytesTransmitter,
 }
 
-impl WasmPlugin {
+impl InitializedWasmPlugin {
     pub fn new(compiled_wasm_bytes: &[u8]) -> Result<Self, ErrBox> {
         let instance = load_instance(compiled_wasm_bytes)?;
         let wasm_functions = Rc::new(WasmFunctions::new(instance)?);
         let bytes_transmitter = BytesTransmitter::new(wasm_functions.clone());
 
-        Ok(WasmPlugin {
+        Ok(InitializedWasmPlugin {
             wasm_functions,
             bytes_transmitter,
         })
@@ -89,7 +87,7 @@ impl WasmPlugin {
     }
 }
 
-impl InitializedPlugin for WasmPlugin {
+impl InitializedPlugin for InitializedWasmPlugin {
     fn get_resolved_config(&self) -> String {
         let len = self.wasm_functions.get_resolved_config();
         self.bytes_transmitter.receive_string(len)

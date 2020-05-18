@@ -1,6 +1,6 @@
 use crate::types::ErrBox;
 use super::super::CompilationResult;
-use super::WasmPlugin;
+use super::InitializedWasmPlugin;
 
 /// Compiles a WASM module.
 pub fn compile(wasm_bytes: &[u8]) -> Result<CompilationResult, ErrBox> {
@@ -16,7 +16,7 @@ pub fn compile(wasm_bytes: &[u8]) -> Result<CompilationResult, ErrBox> {
     }?;
 
     // load the plugin and get the info
-    let plugin = WasmPlugin::new(&bytes)?;
+    let plugin = InitializedWasmPlugin::new(&bytes)?;
     let plugin_info = plugin.get_plugin_info();
 
     Ok(CompilationResult {

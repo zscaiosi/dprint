@@ -5,7 +5,7 @@ use std::sync::Arc;
 use dprint_core::configuration::GlobalConfiguration;
 use super::{CliArgs, parse_args, FormatContext, FormatContexts};
 use crate::environment::Environment;
-use crate::configuration::{self, ConfigMap, ConfigMapValue};
+use crate::configuration::{self, ConfigMap, ConfigMapValue, get_global_config, get_plugin_config_map};
 use crate::plugins::{initialize_plugin, Plugin, PluginResolver};
 use crate::types::ErrBox;
 
@@ -257,7 +257,7 @@ async fn resolve_plugins(config_map: &mut ConfigMap, plugin_resolver: &impl Plug
 
     for plugin in plugins.into_iter() {
         plugins_with_config.push(PluginWithConfig {
-            config: handle_plugin_to_config_map(&plugin, config_map)?,
+            config: get_plugin_config_map(&plugin, config_map)?,
             plugin,
         });
     }
@@ -309,70 +309,6 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &
                 .map(|exclude| if exclude.starts_with("!") { exclude } else { format!("!{}", exclude) })
         );
         return Ok(patterns);
-    }
-}
-
-fn get_global_config(config_map: ConfigMap, environment: &impl Environment) -> Result<GlobalConfiguration, ErrBox> {
-    // now get and resolve the global config
-    let global_config = get_global_config_from_config_map(config_map)?;
-    let global_config_result = dprint_core::configuration::resolve_global_config(global_config);
-
-    // check global diagnostics
-    let mut diagnostic_count = 0;
-    if !global_config_result.diagnostics.is_empty() {
-        for diagnostic in &global_config_result.diagnostics {
-            environment.log_error(&diagnostic.message);
-            diagnostic_count += 1;
-        }
-    }
-
-    return if diagnostic_count > 0 {
-        err!("Had {} config diagnostic(s).", diagnostic_count)
-    } else {
-        Ok(global_config_result.config)
-    };
-
-    fn get_global_config_from_config_map(config_map: ConfigMap) -> Result<HashMap<String, String>, ErrBox> {
-        // at this point, there should only be string values inside the hash map
-        let mut global_config = HashMap::new();
-
-        for (key, value) in config_map.into_iter() {
-            if let ConfigMapValue::String(value) = value {
-                global_config.insert(key, value);
-            } else {
-                return err!("Unexpected object property '{}'.", key);
-            }
-        }
-
-        Ok(global_config)
-    }
-}
-
-fn handle_plugin_to_config_map(
-    plugin: &Box<dyn Plugin>,
-    config_map: &mut ConfigMap,
-) -> Result<HashMap<String, String>, ErrBox> {
-    let mut key_name = None;
-    let config_keys = plugin.config_keys();
-    for config_key in config_keys {
-        if config_map.contains_key(config_key) {
-            if let Some(key_name) = key_name {
-                return err!("Cannot specify both the '{}' and '{}' configurations for {}.", key_name, config_key, plugin.name());
-            } else {
-                key_name = Some(config_key);
-            }
-        }
-    }
-
-    if let Some(key_name) = key_name {
-        let plugin_config_map = config_map.remove(key_name).unwrap();
-        if let ConfigMapValue::HashMap(plugin_config_map) = plugin_config_map {
-            Ok(plugin_config_map)
-        } else {
-            return err!("Expected the configuration property '{}' to be an object.", key_name);
-        }
-    } else {
-        Ok(HashMap::new())
     }
 }
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use dprint_core::generate_plugin_code;
-use dprint_core::configuration::{GlobalConfiguration, ResolveConfigurationResult, ConfigurationDiagnostic};
+use dprint_core::configuration::{GlobalConfiguration, ResolveConfigurationResult, get_unknown_property_diagnostics};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,12 +15,7 @@ pub fn resolve_config(config: HashMap<String, String>, _: &GlobalConfiguration) 
     let ending = config.remove("ending").unwrap_or(String::from("formatted"));
     let mut diagnostics = Vec::new();
 
-    for (key, _) in config.iter() {
-        diagnostics.push(ConfigurationDiagnostic {
-            property_name: String::from(key),
-            message: format!("Unknown property in configuration: {}", key),
-        });
-    }
+    diagnostics.extend(get_unknown_property_diagnostics(config));
 
     ResolveConfigurationResult {
         config: Configuration { ending },
