@@ -34,14 +34,20 @@ fn build_message(project_type_infos: &Vec<(&'static str, &'static str)>, propert
         key_lens.pop().unwrap_or(0)
     };
     let mut message = String::new();
-    message.push_str(&format!("The '{}' property is missing in the configuration file. ", property_name));
+    message.push_str(&format!("The '{}' property is missing in the configuration file.\n\n", property_name));
     message.push_str("You may specify any of the following possible values according to your conscience and that will suppress this warning.\n");
     for project_type_info in project_type_infos {
         message.push_str(&format!("\n * {}", project_type_info.0));
-        message.push_str(&" ".repeat(largest_name_len - project_type_info.0.len() + 1));
-        message.push_str(project_type_info.1);
+        for (i, line) in project_type_info.1.lines().enumerate() {
+            if i == 0 { message.push_str(&" ".repeat(largest_name_len - project_type_info.0.len() + 1)); }
+            else if i > 0 {
+                message.push_str("\n");
+                message.push_str(&" ".repeat(largest_name_len + 4));
+            }
+            message.push_str(line);
+        }
     }
-    message.push_str("\n\nDonate at: https://dprint.dev/sponsor");
+    message.push_str("\n\nSponsor at: https://dprint.dev/sponsor");
     message
 }
 
@@ -51,10 +57,16 @@ fn get_project_type_infos() -> Vec<(&'static str, &'static str)> {
         "Dprint is formatting an open source project."
     ), (
         "commercialSponsored",
-        "Dprint is formatting a commercial project and your company sponsored dprint."
+        concat!(
+            "Dprint is formatting a commercial project and your company sponsored dprint.\n",
+            "Thank you for being part of moving this project forward!"
+        )
     ), (
         "commercialDidNotSponsor",
-        "Dprint is formatting a commercial project and you want to forever enshrine your name in source control for having specified this."
+        concat!(
+            "Dprint is formatting a commercial project and you are just trying it out or don't want to sponsor.\n",
+            "If you are in the financial position to do so, please take the time to sponsor.\n"
+        )
     )]
 }
 
@@ -90,13 +102,17 @@ mod tests {
         assert_eq!(result.is_some(), true);
         let result = result.unwrap();
         assert_eq!(result.property_name, "projectType");
-        assert_eq!(result.message, r#"The 'projectType' property is missing in the configuration file. You may specify any of the following possible values according to your conscience and that will suppress this warning.
+        assert_eq!(result.message, r#"The 'projectType' property is missing in the configuration file.
+
+You may specify any of the following possible values according to your conscience and that will suppress this warning.
 
  * openSource              Dprint is formatting an open source project.
  * commercialSponsored     Dprint is formatting a commercial project and your company sponsored dprint.
- * commercialDidNotSponsor Dprint is formatting a commercial project and you want to forever enshrine your name in source control for having specified this.
+                           Thank you for being part of moving this project forward!
+ * commercialDidNotSponsor Dprint is formatting a commercial project and you are just trying it out or don't want to sponsor.
+                           If you are in the financial position to do so, please take the time to sponsor.
 
-Donate at: https://dprint.dev/sponsor"#);
+Sponsor at: https://dprint.dev/sponsor"#);
     }
 
     #[test]
