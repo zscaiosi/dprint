@@ -3,13 +3,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use dprint_core::configuration::GlobalConfiguration;
-use super::cli::{CliArgs, parse_args};
-use super::environment::Environment;
-use super::configuration;
-use super::configuration::{ConfigMap, ConfigMapValue};
-use super::plugins::{initialize_plugin, Plugin, PluginResolver};
-use super::types::ErrBox;
-use super::format_context::{FormatContext, FormatContexts};
+use super::{CliArgs, parse_args, FormatContext, FormatContexts};
+use crate::environment::Environment;
+use crate::configuration::{self, ConfigMap, ConfigMapValue};
+use crate::plugins::{initialize_plugin, Plugin, PluginResolver};
+use crate::types::ErrBox;
 
 struct PluginWithConfig {
     pub plugin: Box<dyn Plugin>,
@@ -58,7 +56,7 @@ fn get_plugin_format_contexts(plugins_with_config: Vec<PluginWithConfig>, file_p
     let mut file_paths_by_plugin: HashMap<String, Vec<PathBuf>> = HashMap::new();
 
     for file_path in file_paths.into_iter() {
-        if let Some(file_extension) = super::utils::get_lowercase_file_extension(&file_path) {
+        if let Some(file_extension) = crate::utils::get_lowercase_file_extension(&file_path) {
             if let Some(plugin_with_config) = plugins_with_config.iter().filter(|p| p.plugin.file_extensions().contains(&file_extension)).next() {
                 if let Some(file_paths) = file_paths_by_plugin.get_mut(plugin_with_config.plugin.name()) {
                     file_paths.push(file_path);
@@ -719,7 +717,7 @@ mod tests {
     }
 
     // If this file doesn't exist, run `./build.ps1` in test/plugin. (Please consider helping me do something better here :))
-    static PLUGIN_BYTES: &'static [u8] = include_bytes!("../test/test_plugin.wasm");
+    static PLUGIN_BYTES: &'static [u8] = include_bytes!("../../test/test_plugin.wasm");
     lazy_static! {
         // cache the compilation so this only has to be done once across all tests
         static ref COMPILATION_RESULT: CompilationResult = {
