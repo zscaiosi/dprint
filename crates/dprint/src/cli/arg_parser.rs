@@ -33,24 +33,29 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
 
 fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
     App::new("dprint")
-        .about("Format source files")
+        .about("Auto-format source code")
         .long_about(
-            r#"Auto-format JavaScript, TypeScript, and JSON source code.
+            r#"Auto-format source code.
 
-  # create a dprint.config.json file
-  dprint --init
+    Create a dprint.config.json file:
 
-  # check formatting
-  dprint
+      dprint --init
 
-  # write formatted files to file system
-  dprint --write
+    Check formatting:
 
-  # specify path to config file other than the default ./dprint.config.json
-  dprint --config configs/dprint.config.json
+      dprint
 
-  # write using the specified config and file paths
-  dprint --write --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#,
+    Write formatted files to file system:
+
+      dprint --write
+
+    Specify path to config file other than the default ./dprint.config.json:
+
+      dprint --config configs/dprint.config.json
+
+    Write using the specified config and file paths:
+
+      dprint --write --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#,
         )
         .arg(
             Arg::with_name("write")
@@ -87,19 +92,19 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("version")
                 .short("v")
                 .long("version")
-                .help("Outputs the version.")
+                .help("Prints the version.")
                 .takes_value(false),
         )
         .arg(
             Arg::with_name("output-resolved-config")
                 .long("output-resolved-config")
-                .help("Outputs the resolved configuration.")
+                .help("Prints the resolved configuration.")
                 .takes_value(false),
         )
         .arg(
             Arg::with_name("output-file-paths")
                 .long("output-file-paths")
-                .help("Outputs the resolved file paths.")
+                .help("Prints the resolved file paths.")
                 .takes_value(false),
         )
 }
