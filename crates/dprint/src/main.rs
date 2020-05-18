@@ -2,10 +2,10 @@ use environment::{Environment, RealEnvironment};
 
 #[macro_use]
 mod types;
+mod environment;
 
 mod cli;
 mod configuration;
-mod environment;
 mod plugins;
 mod utils;
 
@@ -15,9 +15,9 @@ extern crate lazy_static;
 
 #[tokio::main]
 async fn main() -> Result<(), types::ErrBox> {
-    let environment = RealEnvironment::new();
+    let args = cli::parse_args(std::env::args().collect())?;
+    let environment = RealEnvironment::new(args.verbose);
     let plugin_resolver = plugins::wasm::WasmPluginResolver::new(&environment, &crate::plugins::wasm::compile);
-    let args = std::env::args().collect();
 
     match cli::run_cli(args, &environment, &plugin_resolver).await {
         Err(err) => {

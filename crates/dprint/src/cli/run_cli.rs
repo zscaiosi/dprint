@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use dprint_core::configuration::GlobalConfiguration;
-use super::{CliArgs, parse_args, FormatContext, FormatContexts};
+use super::{CliArgs, FormatContext, FormatContexts};
 use crate::environment::Environment;
 use crate::configuration::{self, ConfigMap, ConfigMapValue, get_global_config, get_plugin_config_map};
 use crate::plugins::{initialize_plugin, Plugin, InitializedPlugin, PluginResolver};
@@ -14,9 +14,7 @@ struct PluginWithConfig {
     pub config: HashMap<String, String>,
 }
 
-pub async fn run_cli(args: Vec<String>, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<(), ErrBox> {
-    let args = parse_args(args)?;
-
+pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<(), ErrBox> {
     if args.version {
         return output_version(&args, environment, plugin_resolver).await;
     }
@@ -147,7 +145,7 @@ async fn init_config_file(environment: &impl Environment) -> Result<(), ErrBox> 
 async fn check_files(format_contexts: FormatContexts, global_config: GlobalConfiguration, environment: &impl Environment) -> Result<(), ErrBox> {
     let not_formatted_files_count = Arc::new(AtomicUsize::new(0));
 
-    run_parallelized(format_contexts, global_config, environment, {
+    let result = run_parallelized(format_contexts, global_config, environment, {
         let not_formatted_files_count = not_formatted_files_count.clone();
         move |plugin, file_path, file_text, _| {
             let formatted_text = plugin.format_text(&file_path, &file_text)?;
@@ -156,7 +154,14 @@ async fn check_files(format_contexts: FormatContexts, global_config: GlobalConfi
             }
             Ok(())
         }
-    }).await?;
+    }).await;
+
+    if let Err(err) = result {
+        return err!(
+            "A panic occurred in a Dprint plugin. You may want to run in verbose mode (--verbose) to help figure out where it failed then report this as a.\n  Error: {}",
+            err.to_string()
+        );
+    }
 
     let not_formatted_files_count = not_formatted_files_count.load(Ordering::SeqCst);
     if not_formatted_files_count == 0 {
@@ -206,7 +211,7 @@ async fn run_parallelized<F, TEnvironment : Environment>(
         let f = f.clone();
         let error_count = error_count.clone();
         tokio::task::spawn_blocking(move || {
-            let plugin_name = String::from(format_context.plugin.name());
+            let plugin_name = format_context.plugin.name().to_string();
             let result = inner_run(format_context, global_config, &environment, f);
             if let Err(err) = result {
                 environment.log_error(&format!("[{}]: {}", plugin_name, err.to_string()));
@@ -343,17 +348,20 @@ fn take_array_from_config_map(config_map: &mut ConfigMap, property_name: &str) -
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use super::run_cli;
     use crate::environment::{Environment, TestEnvironment};
     use crate::configuration::*;
     use crate::plugins::wasm::WasmPluginResolver;
     use crate::plugins::CompilationResult;
     use crate::types::ErrBox;
 
+    use super::run_cli;
+    use super::super::parse_args;
+
     async fn run_test_cli(args: Vec<&'static str>, environment: &impl Environment) -> Result<(), ErrBox> {
         let mut args: Vec<String> = args.into_iter().map(String::from).collect();
         args.insert(0, String::from(""));
         let plugin_resolver = WasmPluginResolver::new(environment, &quick_compile);
+        let args = parse_args(args)?;
         run_cli(args, environment, &plugin_resolver).await
     }
 

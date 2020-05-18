@@ -7,6 +7,7 @@ pub struct CliArgs {
     pub output_file_paths: bool,
     pub output_resolved_config: bool,
     pub allow_node_modules: bool,
+    pub verbose: bool,
     pub write: bool,
     pub config: Option<String>,
     pub file_patterns: Vec<String>,
@@ -25,6 +26,7 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
         output_file_paths: matches.is_present("output-file-paths"),
         output_resolved_config: matches.is_present("output-resolved-config"),
         write: matches.is_present("write"),
+        verbose: matches.is_present("verbose"),
         allow_node_modules: matches.is_present("allow-node-modules"),
         config: matches.value_of("config").map(String::from),
         file_patterns: matches.values_of("file patterns").map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new()),
@@ -105,6 +107,12 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("output-file-paths")
                 .long("output-file-paths")
                 .help("Prints the resolved file paths.")
+                .takes_value(false),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .long("verbose")
+                .help("Prints additional diagnostic information.")
                 .takes_value(false),
         )
 }

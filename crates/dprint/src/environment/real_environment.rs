@@ -10,14 +10,29 @@ use indicatif::{ProgressBar, ProgressStyle};
 use super::Environment;
 use super::super::types::ErrBox;
 
+// use a macro here so the expression provided is only evaluated when in verbose mode
+macro_rules! log_verbose {
+    ($environment:ident, $($arg:tt)*) => {
+        if $environment.is_verbose {
+            let mut text = String::from("[VERBOSE]: ");
+            text.push_str(&format!($($arg)*));
+            $environment.log(&text);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct RealEnvironment {
     output_lock: Arc<Mutex<u8>>,
+    is_verbose: bool,
 }
 
 impl RealEnvironment {
-    pub fn new() -> RealEnvironment {
-        RealEnvironment { output_lock: Arc::new(Mutex::new(0)), }
+    pub fn new(is_verbose: bool) -> RealEnvironment {
+        RealEnvironment {
+            output_lock: Arc::new(Mutex::new(0)),
+            is_verbose,
+        }
     }
 }
 
@@ -26,31 +41,38 @@ const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo { name: "Dprint", author: 
 #[async_trait]
 impl Environment for RealEnvironment {
     fn read_file(&self, file_path: &PathBuf) -> Result<String, ErrBox> {
+        log_verbose!(self, "Reading file: {}", file_path.to_string_lossy());
         let text = fs::read_to_string(file_path)?;
         Ok(text)
     }
 
     fn read_file_bytes(&self, file_path: &PathBuf) -> Result<Bytes, ErrBox> {
+        log_verbose!(self, "Reading file: {}", file_path.to_string_lossy());
         let bytes = fs::read(file_path)?;
         Ok(Bytes::from(bytes))
     }
 
     fn write_file(&self, file_path: &PathBuf, file_text: &str) -> Result<(), ErrBox> {
+        log_verbose!(self, "Writing file: {}", file_path.to_string_lossy());
         fs::write(file_path, file_text)?;
         Ok(())
     }
 
     fn write_file_bytes(&self, file_path: &PathBuf, bytes: &[u8]) -> Result<(), ErrBox> {
+        log_verbose!(self, "Writing file: {}", file_path.to_string_lossy());
         fs::write(file_path, bytes)?;
         Ok(())
     }
 
     fn remove_file(&self, file_path: &PathBuf) -> Result<(), ErrBox> {
+        log_verbose!(self, "Deleting file: {}", file_path.to_string_lossy());
         fs::remove_file(file_path)?;
         Ok(())
     }
 
     async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox> {
+        log_verbose!(self, "Downloading url: {}", url);
+
         // todo: docs say to use only one client (it has an internal connection pool)
         let client = Client::new();
         let mut resp = client.get(url).send().await?;
@@ -82,6 +104,7 @@ impl Environment for RealEnvironment {
     }
 
     fn glob(&self, file_patterns: &Vec<String>) -> Result<Vec<PathBuf>, ErrBox> {
+        log_verbose!(self, "Globbing: {:?}", file_patterns);
         let walker = match globwalk::GlobWalkerBuilder::from_patterns(&PathBuf::from("."), file_patterns).follow_links(true).build() {
             Ok(walker) => walker,
             Err(err) => return err!("Error parsing file patterns: {}", err),
@@ -99,6 +122,7 @@ impl Environment for RealEnvironment {
     }
 
     fn path_exists(&self, file_path: &PathBuf) -> bool {
+        log_verbose!(self, "Checking path exists: {}", file_path.to_string_lossy());
         file_path.exists()
     }
 
@@ -113,6 +137,7 @@ impl Environment for RealEnvironment {
     }
 
     fn get_cache_dir(&self) -> Result<PathBuf, ErrBox> {
+        log_verbose!(self, "Getting cache directory.");
         match app_dirs::app_dir(app_dirs::AppDataType::UserCache, &APP_INFO, "cache") {
             Ok(path) => Ok(path),
             Err(err) => err!("Error getting cache directory: {:?}", err),
