@@ -14,6 +14,7 @@ pub struct InfoFilePluginInfo {
     pub version: String,
     pub url: String,
     pub config_key: String,
+    pub file_extensions: Vec<String>,
 }
 
 const SCHEMA_VERSION: u8 = 1;
@@ -73,14 +74,34 @@ fn get_latest_plugin(value: JsonValue) -> Result<InfoFilePluginInfo, ErrBox> {
     let version = get_string(&mut obj, "version")?;
     let url = get_string(&mut obj, "url")?;
     let config_key = get_string(&mut obj, "configKey")?;
+    let file_extensions = get_file_extensions(&mut obj)?;
 
-    Ok(InfoFilePluginInfo { name, version, url, config_key })
+    Ok(InfoFilePluginInfo { name, version, url, config_key, file_extensions })
 }
 
+fn get_file_extensions(value: &mut JsonObject) -> Result<Vec<String>, ErrBox> {
+    let mut result = Vec::new();
+    for item in get_array(value, "fileExtensions")? {
+        match item {
+            JsonValue::String(item) => result.push(item),
+            _ => return err!("Unexpected non-string in file extensions array."),
+        }
+    }
+    Ok(result)
+}
+
+// todo: move down to json_parser
 fn get_string(value: &mut JsonObject, name: &str) -> Result<String, ErrBox> {
     match value.remove(name) {
         Some(JsonValue::String(text)) => Ok(text),
-        _ => return err!("Could not find value: {}", name),
+        _ => return err!("Could not find string: {}", name),
+    }
+}
+
+fn get_array(value: &mut JsonObject, name: &str) -> Result<Vec<JsonValue>, ErrBox> {
+    match value.remove(name) {
+        Some(JsonValue::Array(arr)) => Ok(arr),
+        _ => return err!("Could not find array: {}", name),
     }
 }
 
@@ -99,12 +120,14 @@ mod test {
         "name": "dprint-plugin-typescript",
         "version": "0.17.2",
         "url": "https://plugins.dprint.dev/typescript-0.17.2.wasm",
-        "configKey": "typescript"
+        "configKey": "typescript",
+        "fileExtensions": ["ts", "tsx"]
     }, {
         "name": "dprint-plugin-jsonc",
         "version": "0.2.3",
         "url": "https://plugins.dprint.dev/json-0.2.3.wasm",
-        "configKey": "json"
+        "configKey": "json",
+        "fileExtensions": ["json"]
     }]
 }"#.as_bytes());
         let info_file = read_info_file(&environment).await.unwrap();
@@ -115,11 +138,13 @@ mod test {
                 version: String::from("0.17.2"),
                 url: String::from("https://plugins.dprint.dev/typescript-0.17.2.wasm"),
                 config_key: String::from("typescript"),
+                file_extensions: vec![String::from("ts"), String::from("tsx")],
             }, InfoFilePluginInfo {
                 name: String::from("dprint-plugin-jsonc"),
                 version: String::from("0.2.3"),
                 url: String::from("https://plugins.dprint.dev/json-0.2.3.wasm"),
                 config_key: String::from("json"),
+                file_extensions: vec![String::from("json")],
             }],
         })
     }

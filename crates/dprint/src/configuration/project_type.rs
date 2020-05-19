@@ -11,7 +11,7 @@ pub fn handle_project_type_diagnostic(config: &mut ConfigMap) -> Option<Configur
     let project_type_infos = get_project_type_infos();
     let property_name = "projectType";
     let has_project_type_config = match config.get(property_name) {
-        Some(ConfigMapValue::String(project_type)) => project_type_infos.iter().any(|(k, _)| k.to_lowercase() == project_type.to_lowercase()),
+        Some(ConfigMapValue::String(project_type)) => project_type_infos.iter().any(|info| info.name.to_lowercase() == project_type.to_lowercase()),
         _ => false,
     };
 
@@ -27,19 +27,19 @@ pub fn handle_project_type_diagnostic(config: &mut ConfigMap) -> Option<Configur
     }
 }
 
-fn build_message(project_type_infos: &Vec<(&'static str, &'static str)>, property_name: &str) -> String {
+fn build_message(project_type_infos: &Vec<ProjectTypeInfo>, property_name: &str) -> String {
     let largest_name_len = {
-        let mut key_lens = project_type_infos.iter().map(|(k, _)| k.len()).collect::<Vec<_>>();
+        let mut key_lens = project_type_infos.iter().map(|info| info.name.len()).collect::<Vec<_>>();
         key_lens.sort();
         key_lens.pop().unwrap_or(0)
     };
     let mut message = String::new();
     message.push_str(&format!("The '{}' property is missing in the configuration file.\n\n", property_name));
-    message.push_str("You may specify any of the following possible values according to your conscience and that will suppress this warning.\n");
+    message.push_str("You may specify any of the following values and that will suppress this error.\n");
     for project_type_info in project_type_infos {
-        message.push_str(&format!("\n * {}", project_type_info.0));
-        for (i, line) in project_type_info.1.lines().enumerate() {
-            if i == 0 { message.push_str(&" ".repeat(largest_name_len - project_type_info.0.len() + 1)); }
+        message.push_str(&format!("\n * {}", project_type_info.name));
+        for (i, line) in project_type_info.description.lines().enumerate() {
+            if i == 0 { message.push_str(&" ".repeat(largest_name_len - project_type_info.name.len() + 1)); }
             else if i > 0 {
                 message.push_str("\n");
                 message.push_str(&" ".repeat(largest_name_len + 4));
@@ -51,23 +51,28 @@ fn build_message(project_type_infos: &Vec<(&'static str, &'static str)>, propert
     message
 }
 
-fn get_project_type_infos() -> Vec<(&'static str, &'static str)> {
-    vec![(
-        "openSource",
-        "Dprint is formatting an open source project."
-    ), (
-        "commercialSponsored",
-        concat!(
+pub struct ProjectTypeInfo {
+    pub name: &'static str,
+    pub description: &'static str,
+}
+
+pub fn get_project_type_infos() -> Vec<ProjectTypeInfo> {
+    vec![ProjectTypeInfo {
+        name: "openSource",
+        description: "Dprint is formatting an open source project.",
+    }, ProjectTypeInfo {
+        name: "commercialSponsored",
+        description: concat!(
             "Dprint is formatting a commercial project and your company sponsored dprint.\n",
             "Thank you for being part of moving this project forward!"
-        )
-    ), (
-        "commercialDidNotSponsor",
-        concat!(
+        ),
+    }, ProjectTypeInfo {
+        name: "commercialDidNotSponsor",
+        description: concat!(
             "Dprint is formatting a commercial project and you are just trying it out or don't want to sponsor.\n",
             "If you are in the financial position to do so, please take the time to sponsor.\n"
-        )
-    )]
+        ),
+    }]
 }
 
 #[cfg(test)]
@@ -104,7 +109,7 @@ mod tests {
         assert_eq!(result.property_name, "projectType");
         assert_eq!(result.message, r#"The 'projectType' property is missing in the configuration file.
 
-You may specify any of the following possible values according to your conscience and that will suppress this warning.
+You may specify any of the following values and that will suppress this error.
 
  * openSource              Dprint is formatting an open source project.
  * commercialSponsored     Dprint is formatting a commercial project and your company sponsored dprint.

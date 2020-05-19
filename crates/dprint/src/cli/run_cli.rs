@@ -692,8 +692,12 @@ mod tests {
             }]
         }"#.as_bytes());
         let expected_text = get_init_config_file_text(&environment).await.unwrap();
+        environment.clear_logs();
         run_test_cli(vec!["--init"], &environment).await.unwrap();
-        assert_eq!(environment.get_logged_messages(), vec!["Created dprint.config.json"]);
+        assert_eq!(environment.get_logged_messages(), vec![
+            "What kind of project will Dprint be formatting?\n\nSponsor at: https://dprint.dev/sponsor\n",
+            "Created dprint.config.json"
+        ]);
         assert_eq!(environment.read_file(&PathBuf::from("./dprint.config.json")).unwrap(), expected_text);
     }
 

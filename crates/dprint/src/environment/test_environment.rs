@@ -14,6 +14,7 @@ pub struct TestEnvironment {
     logged_errors: Arc<Mutex<Vec<String>>>,
     remote_files: Arc<Mutex<HashMap<String, Bytes>>>,
     deleted_directories: Arc<Mutex<Vec<PathBuf>>>,
+    selection_result: Arc<Mutex<usize>>,
 }
 
 impl TestEnvironment {
@@ -24,6 +25,7 @@ impl TestEnvironment {
             logged_errors: Arc::new(Mutex::new(Vec::new())),
             remote_files: Arc::new(Mutex::new(HashMap::new())),
             deleted_directories: Arc::new(Mutex::new(Vec::new())),
+            selection_result: Arc::new(Mutex::new(0)),
         }
     }
 }
@@ -50,6 +52,11 @@ impl TestEnvironment {
     pub fn is_dir_deleted(&self, path: &PathBuf) -> bool {
         let deleted_directories = self.deleted_directories.lock().unwrap();
         deleted_directories.contains(path)
+    }
+
+    pub fn set_selection_result(&self, index: usize) {
+        let mut selection_result = self.selection_result.lock().unwrap();
+        *selection_result = index;
     }
 }
 
@@ -140,6 +147,10 @@ impl Environment for TestEnvironment {
 
     fn get_time_secs(&self) -> u64 {
         123456
+    }
+
+    fn get_selection(&self, _: &Vec<String>) -> Result<usize, ErrBox> {
+        Ok(*self.selection_result.lock().unwrap())
     }
 }
 

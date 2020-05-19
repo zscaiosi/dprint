@@ -18,4 +18,5 @@ pub trait Environment : Clone + std::marker::Send + 'static {
     async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox>;
     fn get_cache_dir(&self) -> Result<PathBuf, ErrBox>;
     fn get_time_secs(&self) -> u64;
+    fn get_selection(&self, items: &Vec<String>) -> Result<usize, ErrBox>;
 }

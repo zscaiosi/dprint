@@ -157,4 +157,14 @@ impl Environment for RealEnvironment {
     fn get_time_secs(&self) -> u64 {
         SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs()
     }
+
+    fn get_selection(&self, items: &Vec<String>) -> Result<usize, ErrBox> {
+        use dialoguer::*;
+
+        let result = Select::new()
+            .items(items)
+            .default(0)
+            .interact()?;
+        Ok(result)
+    }
 }
