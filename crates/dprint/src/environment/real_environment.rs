@@ -105,7 +105,11 @@ impl Environment for RealEnvironment {
 
     fn glob(&self, file_patterns: &Vec<String>) -> Result<Vec<PathBuf>, ErrBox> {
         log_verbose!(self, "Globbing: {:?}", file_patterns);
-        let walker = match globwalk::GlobWalkerBuilder::from_patterns(&PathBuf::from("."), file_patterns).follow_links(true).build() {
+        let walker = globwalk::GlobWalkerBuilder::from_patterns(&PathBuf::from("."), file_patterns)
+            .follow_links(false)
+            .file_type(globwalk::FileType::FILE)
+            .build();
+        let walker = match walker {
             Ok(walker) => walker,
             Err(err) => return err!("Error parsing file patterns: {}", err),
         };

@@ -316,7 +316,8 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &
     let mut file_patterns = get_config_file_patterns(config_map)?;
     file_patterns.extend(args.file_patterns.clone());
     if !args.allow_node_modules {
-        file_patterns.push(String::from("!**/node_modules/**/*"));
+        // glob walker will not search the children of a directory once it's ignored like this
+        file_patterns.push(String::from("!**/node_modules"));
     }
     return environment.glob(&file_patterns);
 

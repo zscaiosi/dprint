@@ -92,7 +92,15 @@ impl Environment for TestEnvironment {
         let files = self.files.lock().unwrap();
 
         for key in files.keys() {
-            if includes_set.is_match(key) && !excludes_set.is_match(key) {
+            let mut has_exclude = false;
+            for ancestor in key.ancestors() {
+                if excludes_set.is_match(ancestor) {
+                    has_exclude = true;
+                    break;
+                }
+            }
+
+            if includes_set.is_match(key) && !has_exclude {
                 file_paths.push(key.clone());
             }
         }
