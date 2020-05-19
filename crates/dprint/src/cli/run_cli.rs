@@ -35,6 +35,11 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
     }
 
     let plugins = resolve_plugins(&mut config_map, plugin_resolver).await?;
+
+    if plugins.is_empty() {
+        return err!("No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
+    }
+
     let global_config = get_global_config(config_map, environment)?;
 
     if args.output_resolved_config {
@@ -540,6 +545,22 @@ mod tests {
 
         run_test_cli(vec!["--write", "**/*.txt"], &environment).await.unwrap();
 
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn it_should_error_when_no_plugins_specified() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "plugins": []
+        }"#).unwrap();
+        environment.write_file(&PathBuf::from("/test.txt"), "test").unwrap();
+
+        let error_message = run_test_cli(vec!["--write", "**/*.txt"], &environment).await.err().unwrap();
+
+        assert_eq!(error_message.to_string(), "No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
