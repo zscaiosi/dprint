@@ -33,7 +33,6 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
     }
 
     let mut config_map = get_config_map_from_args(&args, environment)?;
-    check_project_type_diagnostic(&mut config_map, environment);
     let file_paths = resolve_file_paths(&mut config_map, &args, environment)?;
 
     if args.output_file_paths {
@@ -47,11 +46,15 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
         return err!("No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
     }
 
+    let project_type_result = check_project_type_diagnostic(&mut config_map);
     let global_config = get_global_config(config_map, environment)?;
 
     if args.output_resolved_config {
         return output_resolved_config(plugins, &global_config, environment);
     }
+
+    // at this point surface the project type error
+    project_type_result?;
 
     let format_contexts = get_plugin_format_contexts(plugins, file_paths);
 
@@ -292,12 +295,12 @@ async fn resolve_plugins(config_map: &mut ConfigMap, plugin_resolver: &impl Plug
     Ok(plugins_with_config)
 }
 
-fn check_project_type_diagnostic(config_map: &mut ConfigMap, environment: &impl Environment) {
-    if !config_map.is_empty() {
-        if let Some(diagnostic) = configuration::handle_project_type_diagnostic(config_map) {
-            environment.log_error(&diagnostic.message);
-        }
+fn check_project_type_diagnostic(config_map: &mut ConfigMap) -> Result<(), ErrBox> {
+    if let Some(diagnostic) = configuration::handle_project_type_diagnostic(config_map) {
+        return err!("{}", diagnostic.message);
     }
+
+    Ok(())
 }
 
 fn deserialize_config_file(config_path: &Option<String>, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
@@ -617,16 +620,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_only_warn_when_missing_project_type() {
+    async fn it_should_error_when_missing_project_type() {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
         environment.write_file(&PathBuf::from("/file1.txt"), "text1_formatted").unwrap();
-        run_test_cli(vec!["--write", "/file1.txt"], &environment).await.unwrap();
+        let error_message = run_test_cli(vec!["--write", "/file1.txt"], &environment).await.err().unwrap();
+        assert_eq!(error_message.to_string().find("The 'projectType' property").is_some(), true);
         assert_eq!(environment.get_logged_messages().len(), 0);
-        assert_eq!(environment.get_logged_errors().len(), 1);
-        assert_eq!(environment.get_logged_errors()[0].find("The 'projectType' property").is_some(), true);
+        assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
     #[tokio::test]
