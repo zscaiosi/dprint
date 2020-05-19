@@ -43,7 +43,9 @@ pub async fn get_init_config_file_text(environment: &impl Environment) -> Result
 
     if let Some(info) = &info {
         for plugin in info.latest_plugins.iter() {
-            json_text.push_str(&format!("  \"{}\": {{}},\n", plugin.config_key));
+            // Put the brace on the next line so the user doesn't have to as soon as they
+            // go to add options.
+            json_text.push_str(&format!("  \"{}\": {{\n  }},\n", plugin.config_key));
         }
 
         json_text.push_str("  \"includes\": [\"**/*.{");
@@ -128,8 +130,10 @@ mod test {
             text,
             r#"{
   "projectType": "openSource",
-  "typescript": {},
-  "json": {},
+  "typescript": {
+  },
+  "json": {
+  },
   "includes": ["**/*.{ts,tsx,json}"],
   "excludes": [],
   "plugins": [
@@ -190,7 +194,8 @@ mod test {
             text,
             r#"{
   "projectType": "commercialSponsored",
-  "typescript": {},
+  "typescript": {
+  },
   "includes": ["**/*.{ts}"],
   "excludes": [],
   "plugins": [
