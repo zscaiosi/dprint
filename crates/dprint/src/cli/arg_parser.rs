@@ -4,6 +4,7 @@ use crate::types::ErrBox;
 pub struct CliArgs {
     pub version: bool,
     pub init: bool,
+    pub clear_cache: bool,
     pub output_file_paths: bool,
     pub output_resolved_config: bool,
     pub allow_node_modules: bool,
@@ -23,6 +24,7 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
     Ok(CliArgs {
         version: matches.is_present("version"),
         init: matches.is_present("init"),
+        clear_cache: matches.is_present("clear-cache"),
         output_file_paths: matches.is_present("output-file-paths"),
         output_resolved_config: matches.is_present("output-resolved-config"),
         write: matches.is_present("write"),
@@ -88,6 +90,12 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("init")
                 .long("init")
                 .help("Initializes a configuration file in the current directory.")
+                .takes_value(false),
+        )
+        .arg(
+            Arg::with_name("clear-cache")
+                .long("clear-cache")
+                .help("Deletes the plugin cache directory.")
                 .takes_value(false),
         )
         .arg(

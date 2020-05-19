@@ -19,6 +19,13 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
         return output_version(&args, environment, plugin_resolver).await;
     }
 
+    if args.clear_cache {
+        let cache_dir = environment.get_cache_dir()?; // this actually creates the directory, but whatever
+        environment.remove_dir_all(&cache_dir)?;
+        environment.log(&format!("Deleted {}", cache_dir.to_string_lossy()));
+        return Ok(());
+    }
+
     if args.init {
         init_config_file(environment).await?;
         environment.log("Created dprint.config.json");
@@ -693,6 +700,14 @@ mod tests {
         environment.write_file(&PathBuf::from("./dprint.config.json"), "{}").unwrap();
         let error_message = run_test_cli(vec!["--init"], &environment).await.err().unwrap();
         assert_eq!(error_message.to_string(), "Configuration file 'dprint.config.json' already exists in current working directory.");
+    }
+
+    #[tokio::test]
+    async fn it_should_clear_cache_directory() {
+        let environment = TestEnvironment::new();
+        run_test_cli(vec!["--clear-cache"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Deleted /cache"]);
+        assert_eq!(environment.is_dir_deleted(&PathBuf::from("/cache")), true);
     }
 
     // If this file doesn't exist, run `./build.ps1` in test/plugin. (Please consider helping me do something better here :))

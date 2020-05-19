@@ -13,6 +13,7 @@ pub struct TestEnvironment {
     logged_messages: Arc<Mutex<Vec<String>>>,
     logged_errors: Arc<Mutex<Vec<String>>>,
     remote_files: Arc<Mutex<HashMap<String, Bytes>>>,
+    deleted_directories: Arc<Mutex<Vec<PathBuf>>>,
 }
 
 impl TestEnvironment {
@@ -22,6 +23,7 @@ impl TestEnvironment {
             logged_messages: Arc::new(Mutex::new(Vec::new())),
             logged_errors: Arc::new(Mutex::new(Vec::new())),
             remote_files: Arc::new(Mutex::new(HashMap::new())),
+            deleted_directories: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -43,6 +45,11 @@ impl TestEnvironment {
     pub fn add_remote_file(&self, path: &str, bytes: &'static [u8]) {
         let mut remote_files = self.remote_files.lock().unwrap();
         remote_files.insert(String::from(path), Bytes::from(bytes));
+    }
+
+    pub fn is_dir_deleted(&self, path: &PathBuf) -> bool {
+        let deleted_directories = self.deleted_directories.lock().unwrap();
+        deleted_directories.contains(path)
     }
 }
 
@@ -74,6 +81,12 @@ impl Environment for TestEnvironment {
     fn remove_file(&self, file_path: &PathBuf) -> Result<(), ErrBox> {
         let mut files = self.files.lock().unwrap();
         files.remove(file_path);
+        Ok(())
+    }
+
+    fn remove_dir_all(&self, dir_path: &PathBuf) -> Result<(), ErrBox> {
+        let mut deleted_directories = self.deleted_directories.lock().unwrap();
+        deleted_directories.push(dir_path.to_owned());
         Ok(())
     }
 

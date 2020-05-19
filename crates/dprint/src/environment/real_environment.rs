@@ -70,6 +70,12 @@ impl Environment for RealEnvironment {
         Ok(())
     }
 
+    fn remove_dir_all(&self, dir_path: &PathBuf) -> Result<(), ErrBox> {
+        log_verbose!(self, "Deleting directory: {}", dir_path.to_string_lossy());
+        fs::remove_dir_all(dir_path)?;
+        Ok(())
+    }
+
     async fn download_file(&self, url: &str) -> Result<Bytes, ErrBox> {
         log_verbose!(self, "Downloading url: {}", url);
 
