@@ -35,7 +35,7 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
     let mut config_map = get_config_map_from_args(&args, environment)?;
     let file_paths = resolve_file_paths(&mut config_map, &args, environment)?;
 
-    let plugins = resolve_plugins(&mut config_map, plugin_resolver).await?;
+    let plugins = resolve_plugins(&mut config_map, &args, plugin_resolver).await?;
     if plugins.is_empty() {
         return err!("No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
     }
@@ -106,7 +106,7 @@ async fn output_version<'a>(args: &CliArgs, environment: &impl Environment, plug
     match get_config_map_from_args(args, environment) {
         Ok(config_map) => {
             let mut config_map = config_map;
-            let plugins_with_config = resolve_plugins(&mut config_map, plugin_resolver).await?;
+            let plugins_with_config = resolve_plugins(&mut config_map, args, plugin_resolver).await?;
 
             // output their names and versions
             for plugin_with_config in plugins_with_config.iter() {
@@ -283,8 +283,8 @@ async fn run_parallelized<F, TEnvironment : Environment>(
     }
 }
 
-async fn resolve_plugins(config_map: &mut ConfigMap, plugin_resolver: &impl PluginResolver) -> Result<Vec<PluginWithConfig>, ErrBox> {
-    let plugin_urls = take_array_from_config_map(config_map, "plugins")?;
+async fn resolve_plugins(config_map: &mut ConfigMap, args: &CliArgs, plugin_resolver: &impl PluginResolver) -> Result<Vec<PluginWithConfig>, ErrBox> {
+    let plugin_urls = get_plugin_urls(config_map, args)?;
     let plugins = plugin_resolver.resolve_plugins(&plugin_urls).await?;
     let mut plugins_with_config = Vec::new();
 
@@ -295,7 +295,17 @@ async fn resolve_plugins(config_map: &mut ConfigMap, plugin_resolver: &impl Plug
         });
     }
 
-    Ok(plugins_with_config)
+    return Ok(plugins_with_config);
+
+    fn get_plugin_urls(config_map: &mut ConfigMap, args: &CliArgs) -> Result<Vec<String>, ErrBox> {
+        let plugin_urls_from_config = take_array_from_config_map(config_map, "plugins")?;
+
+        Ok(if args.plugin_urls.is_empty() {
+            plugin_urls_from_config
+        } else {
+            args.plugin_urls.clone()
+        })
+    }
 }
 
 fn check_project_type_diagnostic(config_map: &mut ConfigMap) -> Result<(), ErrBox> {
@@ -304,25 +314,6 @@ fn check_project_type_diagnostic(config_map: &mut ConfigMap) -> Result<(), ErrBo
     }
 
     Ok(())
-}
-
-fn deserialize_config_file(config_path: &Option<String>, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
-    let config_path = PathBuf::from(config_path.as_ref().map(|x| x.to_owned()).unwrap_or(String::from("./dprint.config.json")));
-    let config_file_text = match environment.read_file(&config_path) {
-        Ok(file_text) => file_text,
-        Err(err) => return err!(
-            "No config file found at {}. Did you mean to create (dprint --init) or specify one (dprint --config <path>)?\n  Error: {}",
-            config_path.to_string_lossy(),
-            err.to_string(),
-        ),
-    };
-
-    let result = match configuration::deserialize_config(&config_file_text) {
-        Ok(map) => map,
-        Err(e) => return err!("Error deserializing. {}", e.to_string()),
-    };
-
-    Ok(result)
 }
 
 fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &impl Environment) -> Result<Vec<PathBuf>, ErrBox> {
@@ -351,7 +342,32 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &
 }
 
 fn get_config_map_from_args(args: &CliArgs, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
-    deserialize_config_file(&args.config, environment)
+    let config_path = PathBuf::from(args.config.as_ref().map(|x| x.to_owned()).unwrap_or(String::from("./dprint.config.json")));
+    let config_file_text = match environment.read_file(&config_path) {
+        Ok(file_text) => file_text,
+        Err(err) => {
+            // allow no config file when plugins are specified
+            if !args.plugin_urls.is_empty() && !environment.path_exists(&config_path) {
+                let mut config_map = HashMap::new();
+                // hack: easy way to supress project type diagnostic check
+                config_map.insert(String::from("projectType"), ConfigMapValue::String(String::from("openSource")));
+                return Ok(config_map);
+            }
+
+            return err!(
+                "No config file found at {}. Did you mean to create (dprint --init) or specify one (dprint --config <path>)?\n  Error: {}",
+                config_path.to_string_lossy(),
+                err.to_string(),
+            )
+        },
+    };
+
+    let result = match configuration::deserialize_config(&config_file_text) {
+        Ok(map) => map,
+        Err(e) => return err!("Error deserializing. {}", e.to_string()),
+    };
+
+    Ok(result)
 }
 
 // todo: move somewhere else (maybe make a wrapper around ConfigMap)
@@ -573,6 +589,33 @@ mod tests {
 
         assert_eq!(error_message.to_string(), "No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
         assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn it_should_use_plugins_specified_in_cli_args() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "plugins": ["https://plugins.dprint.dev/test"]
+        }"#).unwrap();
+        environment.write_file(&PathBuf::from("/test.txt"), "test").unwrap();
+
+        run_test_cli(vec!["**/*.txt", "--plugins", "https://plugins.dprint.dev/test-plugin.wasm"], &environment).await.unwrap();
+
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn it_should_allow_using_no_config_when_plugins_specified() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.remove_file(&PathBuf::from("./dprint.config.json")).unwrap();
+        environment.write_file(&PathBuf::from("/test.txt"), "test").unwrap();
+
+        run_test_cli(vec!["**/*.txt", "--plugins", "https://plugins.dprint.dev/test-plugin.wasm"], &environment).await.unwrap();
+
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 

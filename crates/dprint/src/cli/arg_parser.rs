@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{App, Arg, Values};
 use crate::types::ErrBox;
 
 pub struct CliArgs {
@@ -13,6 +13,7 @@ pub struct CliArgs {
     pub config: Option<String>,
     pub file_patterns: Vec<String>,
     pub exclude_file_patterns: Vec<String>,
+    pub plugin_urls: Vec<String>,
 }
 
 pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
@@ -32,8 +33,9 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
         verbose: matches.is_present("verbose"),
         allow_node_modules: matches.is_present("allow-node-modules"),
         config: matches.value_of("config").map(String::from),
-        file_patterns: matches.values_of("file patterns").map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new()),
-        exclude_file_patterns: matches.values_of("excludes").map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new()),
+        file_patterns: values_to_vec(matches.values_of("file patterns")),
+        exclude_file_patterns: values_to_vec(matches.values_of("excludes")),
+        plugin_urls: values_to_vec(matches.values_of("plugins")),
     })
 }
 
@@ -91,6 +93,14 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
                 .multiple(true),
         )
         .arg(
+            Arg::with_name("plugins")
+                .long("plugins")
+                .value_name("urls")
+                .help("List of urls for plugins to use. This overrides what is specified in the config file.")
+                .takes_value(true)
+                .multiple(true),
+        )
+        .arg(
             Arg::with_name("allow-node-modules")
                 .long("allow-node-modules")
                 .help("Allows traversing node module directories (unstable - This flag will be renamed to be non-node specific in the future).")
@@ -133,4 +143,8 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
                 .help("Prints additional diagnostic information.")
                 .takes_value(false),
         )
+}
+
+fn values_to_vec(values: Option<Values>) -> Vec<String> {
+    values.map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new())
 }
