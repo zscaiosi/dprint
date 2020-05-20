@@ -9,7 +9,7 @@ pub struct CliArgs {
     pub output_resolved_config: bool,
     pub allow_node_modules: bool,
     pub verbose: bool,
-    pub write: bool,
+    pub check: bool,
     pub config: Option<String>,
     pub file_patterns: Vec<String>,
 }
@@ -27,7 +27,7 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
         clear_cache: matches.is_present("clear-cache"),
         output_file_paths: matches.is_present("output-file-paths"),
         output_resolved_config: matches.is_present("output-resolved-config"),
-        write: matches.is_present("write"),
+        check: matches.is_present("check"),
         verbose: matches.is_present("verbose"),
         allow_node_modules: matches.is_present("allow-node-modules"),
         config: matches.value_of("config").map(String::from),
@@ -45,26 +45,26 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
 
       dprint --init
 
-    Check formatting:
+    Write formatted files to file system using the default ./dprint.config.json:
 
       dprint
 
-    Write formatted files to file system:
+    Check formatting:
 
-      dprint --write
+      dprint --check
 
-    Specify path to config file other than the default ./dprint.config.json:
+    Specify path to config file other than the default:
 
-      dprint --config configs/dprint.config.json
+      dprint  --check --config configs/dprint.config.json
 
     Write using the specified config and file paths:
 
-      dprint --write --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#,
+      dprint --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#,
         )
         .arg(
-            Arg::with_name("write")
-                .long("write")
-                .help("Writes the formatted files to the file system.")
+            Arg::with_name("check")
+                .long("check")
+                .help("Checks for any files that haven't been formatted.")
                 .takes_value(false),
         )
         .arg(
