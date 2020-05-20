@@ -1,6 +1,6 @@
 use crate::environment::Environment;
 use crate::types::ErrBox;
-use jsonc_parser::{parse_to_value, JsonValue, JsonObject};
+use jsonc_parser::{parse_to_value, JsonValue, JsonObject, JsonArray};
 
 #[derive(PartialEq, Debug)]
 pub struct InfoFile {
@@ -34,8 +34,8 @@ pub async fn read_info_file(environment: &impl Environment) -> Result<InfoFile, 
     };
 
     // check schema version
-    let schema_version = match obj.remove(&String::from("schemaVersion")) {
-        Some(JsonValue::Number(value)) => value.parse::<u32>()?,
+    let schema_version = match obj.take_number("schemaVersion") {
+        Some(value) => value.parse::<u32>()?,
         _ => return err!("Could not find schema version."),
     };
     if schema_version != SCHEMA_VERSION as u32 {
@@ -43,13 +43,13 @@ pub async fn read_info_file(environment: &impl Environment) -> Result<InfoFile, 
     }
 
     // get plugin system version
-    let plugin_system_schema_version = match obj.remove(&String::from("pluginSystemSchemaVersion")) {
-        Some(JsonValue::Number(value)) => value.parse::<u32>()?,
+    let plugin_system_schema_version = match obj.take_number("pluginSystemSchemaVersion") {
+        Some(value) => value.parse::<u32>()?,
         _ => return err!("Could not find plugin system schema version."),
     };
 
-    let latest_plugins = match obj.remove(&String::from("latest")) {
-        Some(JsonValue::Array(arr)) => {
+    let latest_plugins = match obj.take_array("latest") {
+        Some(arr) => {
             let mut plugins = Vec::new();
             for value in arr.into_iter() {
                 plugins.push(get_latest_plugin(value)?);
@@ -90,17 +90,16 @@ fn get_file_extensions(value: &mut JsonObject) -> Result<Vec<String>, ErrBox> {
     Ok(result)
 }
 
-// todo: move down to json_parser
 fn get_string(value: &mut JsonObject, name: &str) -> Result<String, ErrBox> {
-    match value.remove(name) {
-        Some(JsonValue::String(text)) => Ok(text),
+    match value.take_string(name) {
+        Some(text) => Ok(text),
         _ => return err!("Could not find string: {}", name),
     }
 }
 
-fn get_array(value: &mut JsonObject, name: &str) -> Result<Vec<JsonValue>, ErrBox> {
-    match value.remove(name) {
-        Some(JsonValue::Array(arr)) => Ok(arr),
+fn get_array(value: &mut JsonObject, name: &str) -> Result<JsonArray, ErrBox> {
+    match value.take_array(name) {
+        Some(arr) => Ok(arr),
         _ => return err!("Could not find array: {}", name),
     }
 }
