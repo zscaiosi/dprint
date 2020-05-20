@@ -12,6 +12,7 @@ pub struct CliArgs {
     pub check: bool,
     pub config: Option<String>,
     pub file_patterns: Vec<String>,
+    pub exclude_file_patterns: Vec<String>,
 }
 
 pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
@@ -32,6 +33,7 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
         allow_node_modules: matches.is_present("allow-node-modules"),
         config: matches.value_of("config").map(String::from),
         file_patterns: matches.values_of("file patterns").map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new()),
+        exclude_file_patterns: matches.values_of("excludes").map(|x| x.map(std::string::ToString::to_string).collect()).unwrap_or(Vec::new()),
     })
 }
 
@@ -45,7 +47,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
 
       dprint --init
 
-    Write formatted files to file system using the default ./dprint.config.json:
+    Write formatted files to file system using the config file at ./dprint.config.json:
 
       dprint
 
@@ -55,7 +57,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
 
     Specify path to config file other than the default:
 
-      dprint  --check --config configs/dprint.config.json
+      dprint --config configs/dprint.config.json
 
     Write using the specified config and file paths:
 
@@ -76,7 +78,15 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
         .arg(
             Arg::with_name("file patterns")
-                .help("List of file patterns used to find files to format.")
+                .help("List of file patterns used to find files to format. This overrides what is specified in the config file.")
+                .takes_value(true)
+                .multiple(true),
+        )
+        .arg(
+            Arg::with_name("excludes")
+                .long("excludes")
+                .value_name("patterns")
+                .help("List of file patterns to exclude when formatting. This overrides what is specified in the config file.")
                 .takes_value(true)
                 .multiple(true),
         )

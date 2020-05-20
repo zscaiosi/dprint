@@ -323,24 +323,28 @@ fn deserialize_config_file(config_path: &Option<String>, environment: &impl Envi
 }
 
 fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &impl Environment) -> Result<Vec<PathBuf>, ErrBox> {
-    let mut file_patterns = get_config_file_patterns(config_map)?;
-    file_patterns.extend(args.file_patterns.clone());
+    let mut file_patterns = Vec::new();
+    let includes = take_array_from_config_map(config_map, "includes")?;
+    let excludes = take_array_from_config_map(config_map, "excludes")?;
+
+    file_patterns.extend(if args.file_patterns.is_empty() {
+        includes
+    } else {
+        args.file_patterns.clone()
+    });
+
+    file_patterns.extend(if args.exclude_file_patterns.is_empty() {
+        excludes
+    } else {
+        args.exclude_file_patterns.clone()
+    }.into_iter().map(|exclude| if exclude.starts_with("!") { exclude } else { format!("!{}", exclude) }));
+
     if !args.allow_node_modules {
         // glob walker will not search the children of a directory once it's ignored like this
         file_patterns.push(String::from("!**/node_modules"));
     }
-    return environment.glob(&file_patterns);
 
-    fn get_config_file_patterns(config_map: &mut ConfigMap) -> Result<Vec<String>, ErrBox> {
-        let mut patterns = Vec::new();
-        patterns.extend(take_array_from_config_map(config_map, "includes")?);
-        patterns.extend(
-            take_array_from_config_map(config_map, "excludes")?
-                .into_iter()
-                .map(|exclude| if exclude.starts_with("!") { exclude } else { format!("!{}", exclude) })
-        );
-        return Ok(patterns);
-    }
+    environment.glob(&file_patterns)
 }
 
 fn get_config_map_from_args(args: &CliArgs, environment: &impl Environment) -> Result<ConfigMap, ErrBox> {
@@ -585,7 +589,7 @@ mod tests {
         environment.write_file(&file_path2, "text2").unwrap();
         environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
             "projectType": "openSource",
-            "includes": ["**/*.txt"]
+            "includes": ["**/*.txt"],
             "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
 
@@ -595,6 +599,72 @@ mod tests {
         assert_eq!(environment.get_logged_errors().len(), 0);
         assert_eq!(environment.read_file(&file_path1).unwrap(), "text1_formatted");
         assert_eq!(environment.read_file(&file_path2).unwrap(), "text2_formatted");
+    }
+
+    #[tokio::test]
+    async fn it_should_override_config_includes_with_cli_includes() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path1 = PathBuf::from("/file1.txt");
+        let file_path2 = PathBuf::from("/file2.txt");
+        environment.write_file(&file_path1, "text1").unwrap();
+        environment.write_file(&file_path2, "text2").unwrap();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "includes": ["**/*.txt"],
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+
+        run_test_cli(vec!["/file1.txt"], &environment).await.unwrap();
+
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path1).unwrap(), "text1_formatted");
+        assert_eq!(environment.read_file(&file_path2).unwrap(), "text2");
+    }
+
+    #[tokio::test]
+    async fn it_should_override_config_excludes_with_cli_excludes() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path1 = PathBuf::from("/file1.txt");
+        let file_path2 = PathBuf::from("/file2.txt");
+        environment.write_file(&file_path1, "text1").unwrap();
+        environment.write_file(&file_path2, "text2").unwrap();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "includes": ["**/*.txt"],
+            "excludes": ["/file1.txt"],
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+
+        run_test_cli(vec!["--excludes", "/file2.txt"], &environment).await.unwrap();
+
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path1).unwrap(), "text1_formatted");
+        assert_eq!(environment.read_file(&file_path2).unwrap(), "text2");
+    }
+
+
+    #[tokio::test]
+    async fn it_should_override_config_includes_and_excludes_with_cli() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path1 = PathBuf::from("/file1.txt");
+        let file_path2 = PathBuf::from("/file2.txt");
+        environment.write_file(&file_path1, "text1").unwrap();
+        environment.write_file(&file_path2, "text2").unwrap();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "includes": ["/file2.txt"],
+            "excludes": ["/file1.txt"],
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+
+        run_test_cli(vec!["/file1.txt", "--excludes", "/file2.txt"], &environment).await.unwrap();
+
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path1).unwrap(), "text1_formatted");
+        assert_eq!(environment.read_file(&file_path2).unwrap(), "text2");
     }
 
     #[tokio::test]
