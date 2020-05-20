@@ -35,13 +35,7 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
     let mut config_map = get_config_map_from_args(&args, environment)?;
     let file_paths = resolve_file_paths(&mut config_map, &args, environment)?;
 
-    if args.output_file_paths {
-        output_file_paths(file_paths.iter(), environment);
-        return Ok(());
-    }
-
     let plugins = resolve_plugins(&mut config_map, plugin_resolver).await?;
-
     if plugins.is_empty() {
         return err!("No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
     }
@@ -53,10 +47,19 @@ pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resol
         return output_resolved_config(plugins, &global_config, environment);
     }
 
-    // at this point surface the project type error
-    project_type_result?;
-
     let format_contexts = get_plugin_format_contexts(plugins, file_paths);
+
+    if args.output_file_paths {
+        output_file_paths(format_contexts.iter().flat_map(|x| x.file_paths.iter()), environment);
+        return Ok(());
+    }
+
+    if format_contexts.is_empty() {
+        return err!("No files found to format with the specified plugins. You may want to try using `--output-file-paths` to see which files it's finding.");
+    }
+
+    // surface the project type error at this point
+    project_type_result?;
 
     if args.check {
         check_files(format_contexts, global_config, environment).await
@@ -429,12 +432,21 @@ mod tests {
     #[tokio::test]
     async fn it_should_output_resolved_file_paths() {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        environment.write_file(&PathBuf::from("/file.txt"), "const t=4;").unwrap();
+        environment.write_file(&PathBuf::from("/file2.txt"), "const t=4;").unwrap();
+        run_test_cli(vec!["--output-file-paths", "**/*.txt"], &environment).await.unwrap();
+        let mut logged_messages = environment.get_logged_messages();
+        logged_messages.sort();
+        assert_eq!(logged_messages, vec!["/file.txt", "/file2.txt"]);
+    }
+
+    #[tokio::test]
+    async fn it_should_not_output_file_paths_not_supported_by_plugins() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("/file.ts"), "const t=4;").unwrap();
         environment.write_file(&PathBuf::from("/file2.ts"), "const t=4;").unwrap();
         run_test_cli(vec!["--output-file-paths", "**/*.ts"], &environment).await.unwrap();
-        let mut logged_messages = environment.get_logged_messages();
-        logged_messages.sort();
-        assert_eq!(logged_messages, vec!["/file.ts", "/file2.ts"]);
+        assert_eq!(environment.get_logged_messages().len(), 0);
     }
 
     #[tokio::test]
@@ -453,8 +465,9 @@ mod tests {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("/node_modules/file.txt"), "").unwrap();
         environment.write_file(&PathBuf::from("/test/node_modules/file.txt"), "").unwrap();
+        environment.write_file(&PathBuf::from("/file.txt"), "").unwrap();
         run_test_cli(vec!["**/*.txt"], &environment).await.unwrap();
-        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
 
@@ -548,23 +561,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_not_error_on_plugin_config_diagnostic_when_no_files_to_format() {
-        // It shouldn't error here because plugins are lazily loaded, so it's not going to
-        // load the plugin to check the config diagnostics.
-        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
-        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
-            "projectType": "openSource",
-            "test-plugin": { "non-existent": 25 },
-            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
-        }"#).unwrap();
-
-        run_test_cli(vec!["**/*.txt"], &environment).await.unwrap();
-
-        assert_eq!(environment.get_logged_messages().len(), 0);
-        assert_eq!(environment.get_logged_errors().len(), 0);
-    }
-
-    #[tokio::test]
     async fn it_should_error_when_no_plugins_specified() {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
@@ -576,6 +572,22 @@ mod tests {
         let error_message = run_test_cli(vec!["**/*.txt"], &environment).await.err().unwrap();
 
         assert_eq!(error_message.to_string(), "No formatting plugins found. Ensure at least one is specified in the 'plugins' array of the configuration file.");
+        assert_eq!(environment.get_logged_messages().len(), 0);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn it_should_error_when_no_files_match_glob() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let error_message = run_test_cli(vec!["**/*.txt"], &environment).await.err().unwrap();
+
+        assert_eq!(
+            error_message.to_string(),
+            concat!(
+                "No files found to format with the specified plugins. ",
+                "You may want to try using `--output-file-paths` to see which files it's finding."
+            )
+        );
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
@@ -716,7 +728,7 @@ mod tests {
         let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
         let file_path = PathBuf::from("/file.txt");
         environment.write_file(&file_path, "text_formatted").unwrap();
-        run_test_cli(vec!["--check", "/file.ts"], &environment).await.unwrap();
+        run_test_cli(vec!["--check", "/file.txt"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages().len(), 0);
         assert_eq!(environment.get_logged_errors().len(), 0);
     }
