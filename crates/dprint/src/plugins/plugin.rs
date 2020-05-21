@@ -13,6 +13,8 @@ pub trait Plugin : std::marker::Send {
     fn config_keys(&self) -> &Vec<String>;
     /// Gets the file extensions.
     fn file_extensions(&self) -> &Vec<String>;
+    /// Gets the help url.
+    fn help_url(&self) -> &str;
     /// Initializes the plugin.
     fn initialize(&mut self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) -> Result<Box<dyn InitializedPlugin>, ErrBox>;
 }
@@ -50,6 +52,7 @@ impl TestPlugin {
 impl Plugin for TestPlugin {
     fn name(&self) -> &str { &self.name }
     fn version(&self) -> &str { "1.0.0" }
+    fn help_url(&self) -> &str { "https://dprint.dev/plugins/test" }
     fn config_keys(&self) -> &Vec<String> { &self.config_keys }
     fn file_extensions(&self) -> &Vec<String> { &self.file_extensions }
     fn initialize(&mut self, _: HashMap<String, String>, _: &GlobalConfiguration) -> Result<Box<dyn InitializedPlugin>, ErrBox> {

@@ -11,6 +11,10 @@ fn get_plugin_file_extensions() -> Vec<String> {
     vec![String::from("ts"), String::from("tsx"), String::from("js"), String::from("jsx")]
 }
 
+fn get_plugin_help_url() -> String {
+    String::from("https://dprint.dev/plugins/typescript")
+}
+
 static mut FORMATTER: Option<Formatter> = None;
 
 fn format_text(file_path: &PathBuf, file_text: &str, config: &Configuration) -> Result<String, String> {

@@ -40,6 +40,10 @@ impl Plugin for WasmPlugin {
         &self.plugin_info.file_extensions
     }
 
+    fn help_url(&self) -> &str {
+        &self.plugin_info.help_url
+    }
+
     fn initialize(&mut self, plugin_config: HashMap<String, String>, global_config: &GlobalConfiguration) -> Result<Box<dyn InitializedPlugin>, ErrBox> {
         let wasm_bytes = self.compiled_wasm_bytes.take().expect("Cannot initialize a plugin twice."); // free memory
         let wasm_plugin = InitializedWasmPlugin::new(&wasm_bytes)?;

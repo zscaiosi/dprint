@@ -15,6 +15,9 @@ struct PluginWithConfig {
 }
 
 pub async fn run_cli(args: CliArgs, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<(), ErrBox> {
+    if args.help_text.is_some() {
+        return output_help(&args, environment, plugin_resolver).await;
+    }
     if args.version {
         return output_version(&args, environment, plugin_resolver).await;
     }
@@ -98,28 +101,48 @@ fn get_plugin_format_contexts(plugins_with_config: Vec<PluginWithConfig>, file_p
     format_contexts
 }
 
-async fn output_version<'a>(args: &CliArgs, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<(), ErrBox> {
+async fn output_version(args: &CliArgs, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<(), ErrBox> {
     // log the cli's current version first
     environment.log(&format!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")));
 
     // now check for the plugins
-    match get_config_map_from_args(args, environment) {
-        Ok(config_map) => {
-            let mut config_map = config_map;
-            let plugins_with_config = resolve_plugins(&mut config_map, args, plugin_resolver).await?;
+    for plugin in get_plugins_from_args(args, environment, plugin_resolver).await? {
+        // output their names and versions
+        environment.log(&format!("{} v{}", plugin.name(), plugin.version()));
+    }
 
-            // output their names and versions
-            for plugin_with_config in plugins_with_config.iter() {
-                let plugin = &plugin_with_config.plugin;
-                environment.log(&format!("{} v{}", plugin.name(), plugin.version()));
-            }
-        },
-        Err(_) => {
-            // ignore
+    Ok(())
+}
+
+async fn output_help(args: &CliArgs, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<(), ErrBox> {
+    // log the cli's help first
+    environment.log(args.help_text.as_ref().unwrap());
+
+    // now check for the plugins
+    let plugins = get_plugins_from_args(args, environment, plugin_resolver).await?;
+    if !plugins.is_empty() {
+        environment.log("\nPLUGINS HELP:");
+        for plugin in plugins {
+            // output their names and help urls
+            environment.log(&format!("    {}: {}", plugin.name(), plugin.help_url()));
         }
     }
 
     Ok(())
+}
+
+async fn get_plugins_from_args(args: &CliArgs, environment: &impl Environment, plugin_resolver: &impl PluginResolver) -> Result<Vec<Box<dyn Plugin>>, ErrBox> {
+    match get_config_map_from_args(args, environment) {
+        Ok(config_map) => {
+            let mut config_map = config_map;
+            let plugins_with_config = resolve_plugins(&mut config_map, args, plugin_resolver).await?;
+            Ok(plugins_with_config.into_iter().map(|p| p.plugin).collect())
+        },
+        Err(_) => {
+            // ignore
+            Ok(Vec::new())
+        }
+    }
 }
 
 fn output_file_paths<'a>(file_paths: impl Iterator<Item=&'a PathBuf>, environment: &impl Environment) {
@@ -434,6 +457,35 @@ mod tests {
         assert_eq!(logged_messages, vec![
             format!("dprint v{}", env!("CARGO_PKG_VERSION")),
             String::from("test-plugin v0.1.0")
+        ]);
+    }
+
+    #[tokio::test]
+    async fn it_should_output_help_with_no_plugins() {
+        let environment = TestEnvironment::new();
+        run_test_cli(vec!["--help"], &environment).await.unwrap();
+        let logged_messages = environment.get_logged_messages();
+        assert_eq!(logged_messages, vec![get_expected_help_text()]);
+    }
+
+    #[tokio::test]
+    async fn it_should_output_help_text_with_plugins() {
+        let environment = get_test_environment_with_remote_plugin();
+        environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
+            "projectType": "openSource",
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+        }"#).unwrap();
+
+        // run it once to initialize the plugins (this is not a big deal)
+        run_test_cli(vec!["--help"], &environment).await.unwrap();
+        environment.clear_logs();
+
+        run_test_cli(vec!["--help"], &environment).await.unwrap();
+        let logged_messages = environment.get_logged_messages();
+        assert_eq!(logged_messages, vec![
+            get_expected_help_text(),
+            "\nPLUGINS HELP:",
+            "    test-plugin: https://dprint.dev/plugins/test",
         ]);
     }
 
@@ -840,6 +892,57 @@ mod tests {
         run_test_cli(vec!["--clear-cache"], &environment).await.unwrap();
         assert_eq!(environment.get_logged_messages(), vec!["Deleted /cache"]);
         assert_eq!(environment.is_dir_deleted(&PathBuf::from("/cache")), true);
+    }
+
+    fn get_expected_help_text() -> &'static str {
+        r#"dprint 0.4.0-alpha4
+Copyright 2020 by David Sherret
+
+Auto-formats source code based on the specified plugins.
+
+USAGE:
+    dprint [OPTIONS] [--] [file patterns]...
+
+OPTIONS:
+        --allow-node-modules        Allows traversing node module directories (unstable - This flag will be renamed to
+                                    be non-node specific in the future).
+        --check                     Checks for any files that haven't been formatted.
+        --clear-cache               Deletes the plugin cache directory.
+    -c, --config <config>           Path to JSON configuration file. Defaults to ./dprint.config.json when not provided.
+        --excludes <patterns>...    List of file patterns to exclude when formatting (globs in quotes separated by
+                                    spaces). This overrides what is specified in the config file.
+        --init                      Initializes a configuration file in the current directory.
+        --output-file-paths         Prints the resolved file paths.
+        --output-resolved-config    Prints the resolved configuration.
+        --plugins <urls>...         List of urls for plugins to use. This overrides what is specified in the config
+                                    file.
+        --verbose                   Prints additional diagnostic information.
+    -v, --version                   Prints the version.
+
+ARGS:
+    <file patterns>...    List of file patterns used to find files to format (globs in quotes separated by spaces).
+                          This overrides what is specified in the config file.
+
+EXAMPLES:
+    Create a dprint.config.json file:
+
+      dprint --init
+
+    Write formatted files to file system using the config file at ./dprint.config.json:
+
+      dprint
+
+    Check for any files that haven't been formatted:
+
+      dprint --check
+
+    Specify path to config file other than the default:
+
+      dprint --config configs/dprint.config.json
+
+    Write using the specified config and file paths:
+
+      dprint --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#
     }
 
     // If this file doesn't exist, run `./build.ps1` in test/plugin. (Please consider helping me do something better here :))

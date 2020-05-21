@@ -152,7 +152,8 @@ mod test {
         "name": "test-plugin",
         "version": "0.1.0",
         "configKeys": ["test-plugin"],
-        "fileExtensions": ["txt","dat"]
+        "fileExtensions": ["txt","dat"],
+        "helpUrl": "test-url"
     }
 }] }"#
         ).unwrap();
@@ -183,7 +184,7 @@ mod test {
         // should have saved the manifest
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[{"url":"https://plugins.dprint.dev/test.wasm","fileName":"test.compiled_wasm","createdTime":123456,"pluginInfo":{"name":"test-plugin","version":"0.1.0","configKeys":["test-plugin"],"fileExtensions":["txt","dat"]}}]}"#,
+            r#"{"urls":[{"url":"https://plugins.dprint.dev/test.wasm","fileName":"test.compiled_wasm","createdTime":123456,"pluginInfo":{"name":"test-plugin","version":"0.1.0","configKeys":["test-plugin"],"fileExtensions":["txt","dat"],"helpUrl":"test-url"}}]}"#,
         );
         Ok(())
     }
@@ -287,6 +288,7 @@ mod test {
             version: String::from("0.1.0"),
             config_keys: vec![String::from("test-plugin")],
             file_extensions: vec![String::from("txt"), String::from("dat")],
+            help_url: String::from("test-url"),
         }
     }
 }

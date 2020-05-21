@@ -1,4 +1,4 @@
-use clap::{App, Arg, Values};
+use clap::{App, Arg, Values, AppSettings};
 use crate::types::ErrBox;
 
 pub struct CliArgs {
@@ -14,14 +14,20 @@ pub struct CliArgs {
     pub file_patterns: Vec<String>,
     pub exclude_file_patterns: Vec<String>,
     pub plugin_urls: Vec<String>,
+    pub help_text: Option<String>,
 }
 
 pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
-    let cli_parser = create_cli_parser();
-    let matches = match cli_parser.get_matches_from_safe(args) {
+    let mut cli_parser = create_cli_parser();
+    let matches = match cli_parser.get_matches_from_safe_borrow(args) {
         Ok(result) => result,
         Err(err) => return err!("{}", err.to_string()),
     };
+    let help_text = if matches.is_present("help") {
+        let mut text = Vec::new();
+        cli_parser.write_help(&mut text).unwrap();
+        Some(String::from_utf8(text).unwrap())
+    } else { None };
 
     Ok(CliArgs {
         version: matches.is_present("version"),
@@ -36,15 +42,20 @@ pub fn parse_args(args: Vec<String>) -> Result<CliArgs, ErrBox> {
         file_patterns: values_to_vec(matches.values_of("file patterns")),
         exclude_file_patterns: values_to_vec(matches.values_of("excludes")),
         plugin_urls: values_to_vec(matches.values_of("plugins")),
+        help_text,
     })
 }
 
 fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
     App::new("dprint")
-        .about("Auto-format source code")
-        .long_about(
-            r#"Auto-format source code.
-
+        .setting(AppSettings::UnifiedHelpMessage)
+        .setting(AppSettings::DisableHelpFlags)
+        .bin_name("dprint")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("Copyright 2020 by David Sherret")
+        .about("\nAuto-formats source code based on the specified plugins.")
+        .after_help(
+            r#"EXAMPLES:
     Create a dprint.config.json file:
 
       dprint --init
@@ -53,7 +64,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
 
       dprint
 
-    Check formatting:
+    Check for any files that haven't been formatted:
 
       dprint --check
 
@@ -80,7 +91,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
         .arg(
             Arg::with_name("file patterns")
-                .help("List of file patterns used to find files to format. This overrides what is specified in the config file.")
+                .help("List of file patterns used to find files to format (globs in quotes separated by spaces). This overrides what is specified in the config file.")
                 .takes_value(true)
                 .multiple(true),
         )
@@ -88,7 +99,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("excludes")
                 .long("excludes")
                 .value_name("patterns")
-                .help("List of file patterns to exclude when formatting. This overrides what is specified in the config file.")
+                .help("List of file patterns to exclude when formatting (globs in quotes separated by spaces). This overrides what is specified in the config file.")
                 .takes_value(true)
                 .multiple(true),
         )
@@ -141,6 +152,13 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("verbose")
                 .long("verbose")
                 .help("Prints additional diagnostic information.")
+                .takes_value(false),
+        )
+        .arg(
+            Arg::with_name("help")
+                .long("help")
+                .short("h")
+                .hidden(true)
                 .takes_value(false),
         )
 }

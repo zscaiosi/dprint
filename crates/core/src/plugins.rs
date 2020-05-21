@@ -12,6 +12,8 @@ pub struct PluginInfo {
     pub config_keys: Vec<String>,
     /// The file extensions this plugin supports.
     pub file_extensions: Vec<String>,
+    /// A url the user can go to in order to get help information about the plugin.
+    pub help_url: String,
 }
 
 /// The plugin system schema version that is incremented
@@ -82,6 +84,7 @@ pub mod macros {
                     version: String::from(env!("CARGO_PKG_VERSION")),
                     config_keys: get_plugin_config_keys(),
                     file_extensions: get_plugin_file_extensions(),
+                    help_url: get_plugin_help_url(),
                 }).unwrap();
                 set_shared_bytes_str(info_json)
             }

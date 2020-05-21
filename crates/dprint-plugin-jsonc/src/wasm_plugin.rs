@@ -14,4 +14,8 @@ fn format_text(_: &PathBuf, file_text: &str, config: &Configuration) -> Result<S
     super::format_text(file_text, config)
 }
 
+fn get_plugin_help_url() -> String {
+    String::from("https://dprint.dev/plugins/json")
+}
+
 generate_plugin_code!();

@@ -82,7 +82,8 @@ mod test {
             "name": "test-plugin",
             "version": "0.1.0",
             "configKeys": ["test-plugin"],
-            "fileExtensions": ["txt","dat"]
+            "fileExtensions": ["txt","dat"],
+            "helpUrl": "test-url"
         }
     }]
 }"#
@@ -147,7 +148,7 @@ mod test {
         write_manifest(&manifest, &environment).unwrap();
         assert_eq!(
             environment.read_file(&environment.get_cache_dir().unwrap().join("cache-manifest.json")).unwrap(),
-            r#"{"urls":[{"url":"a","fileName":"b","createdTime":123},{"url":"c","fileName":"d","createdTime":456,"pluginInfo":{"name":"test-plugin","version":"0.1.0","configKeys":["test-plugin"],"fileExtensions":["txt","dat"]}}]}"#
+            r#"{"urls":[{"url":"a","fileName":"b","createdTime":123},{"url":"c","fileName":"d","createdTime":456,"pluginInfo":{"name":"test-plugin","version":"0.1.0","configKeys":["test-plugin"],"fileExtensions":["txt","dat"],"helpUrl":"test-url"}}]}"#
         );
     }
 
@@ -157,6 +158,7 @@ mod test {
             version: String::from("0.1.0"),
             config_keys: vec![String::from("test-plugin")],
             file_extensions: vec![String::from("txt"), String::from("dat")],
+            help_url: String::from("test-url"),
         }
     }
 }

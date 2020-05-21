@@ -31,6 +31,10 @@ fn get_plugin_file_extensions() -> Vec<String> {
     vec![String::from("txt")]
 }
 
+fn get_plugin_help_url() -> String {
+    String::from("https://dprint.dev/plugins/test")
+}
+
 fn format_text(_: &PathBuf, file_text: &str, config: &Configuration) -> Result<String, String> {
     if file_text.ends_with(&config.ending) {
         Ok(String::from(file_text))
