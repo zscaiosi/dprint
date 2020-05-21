@@ -1,4 +1,5 @@
 use dprint_core::configuration::ConfigurationDiagnostic;
+use crate::utils::get_table_text;
 use super::{ConfigMapValue, ConfigMap};
 
 /// Checks if the configuration has a missing "projectType" property.
@@ -28,24 +29,12 @@ pub fn handle_project_type_diagnostic(config: &mut ConfigMap) -> Option<Configur
 }
 
 fn build_message(project_type_infos: &Vec<ProjectTypeInfo>, property_name: &str) -> String {
-    let largest_name_len = {
-        let mut key_lens = project_type_infos.iter().map(|info| info.name.len()).collect::<Vec<_>>();
-        key_lens.sort();
-        key_lens.pop().unwrap_or(0)
-    };
     let mut message = String::new();
     message.push_str(&format!("The '{}' property is missing in the configuration file.\n\n", property_name));
     message.push_str("You may specify any of the following values and that will suppress this error.\n");
-    for project_type_info in project_type_infos {
-        message.push_str(&format!("\n * {}", project_type_info.name));
-        for (i, line) in project_type_info.description.lines().enumerate() {
-            if i == 0 { message.push_str(&" ".repeat(largest_name_len - project_type_info.name.len() + 1)); }
-            else if i > 0 {
-                message.push_str("\n");
-                message.push_str(&" ".repeat(largest_name_len + 4));
-            }
-            message.push_str(line);
-        }
+    let option_texts = get_table_text(project_type_infos.iter().map(|info| (info.name, info.description)).collect(), 3);
+    for option_text in option_texts {
+        message.push_str(&format!("\n * {}", option_text))
     }
     message.push_str("\n\nSponsor at: https://dprint.dev/sponsor");
     message

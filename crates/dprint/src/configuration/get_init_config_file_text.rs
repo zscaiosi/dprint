@@ -3,6 +3,7 @@ use dprint_core::plugins::PLUGIN_SYSTEM_SCHEMA_VERSION;
 use crate::environment::Environment;
 use crate::plugins::read_info_file;
 use crate::types::ErrBox;
+use crate::utils::get_table_text;
 
 use super::get_project_type_infos;
 
@@ -77,25 +78,9 @@ pub async fn get_init_config_file_text(environment: &impl Environment) -> Result
 
 fn get_project_type_name(environment: &impl Environment) -> Result<&'static str, ErrBox> {
     let project_type_infos = get_project_type_infos();
-    let largest_name_len = {
-        let mut key_lens = project_type_infos.iter().map(|info| info.name.len()).collect::<Vec<_>>();
-        key_lens.sort();
-        key_lens.pop().unwrap_or(0)
-    };
     environment.log("What kind of project will Dprint be formatting?\n\nSponsor at: https://dprint.dev/sponsor\n");
-    let project_type_index = environment.get_selection(&project_type_infos.iter().map(|info| {
-        let mut text = String::new();
-        text.push_str(info.name);
-        for (i, line) in info.description.lines().enumerate() {
-            if i == 0 { text.push_str(&" ".repeat(largest_name_len - info.name.len() + 1)); }
-            else if i > 0 {
-                text.push_str("\n");
-                text.push_str(&" ".repeat(largest_name_len + 3));
-            }
-            text.push_str(line);
-        }
-        text
-    }).collect())?;
+    let options = get_table_text(project_type_infos.iter().map(|info| (info.name, info.description)).collect(), 2);
+    let project_type_index = environment.get_selection(&options)?;
     Ok(project_type_infos[project_type_index].name)
 }
 

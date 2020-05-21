@@ -7,6 +7,7 @@ use super::{CliArgs, FormatContext, FormatContexts};
 use crate::environment::Environment;
 use crate::configuration::{self, ConfigMap, ConfigMapValue, get_global_config, get_plugin_config_map};
 use crate::plugins::{initialize_plugin, Plugin, InitializedPlugin, PluginResolver};
+use crate::utils::get_table_text;
 use crate::types::ErrBox;
 
 struct PluginWithConfig {
@@ -121,10 +122,11 @@ async fn output_help(args: &CliArgs, environment: &impl Environment, plugin_reso
     // now check for the plugins
     let plugins = get_plugins_from_args(args, environment, plugin_resolver).await?;
     if !plugins.is_empty() {
+        let plugin_texts = get_table_text(plugins.iter().map(|plugin| (plugin.name(), plugin.help_url())).collect(), 4);
         environment.log("\nPLUGINS HELP:");
-        for plugin in plugins {
+        for plugin_text in plugin_texts {
             // output their names and help urls
-            environment.log(&format!("    {}: {}", plugin.name(), plugin.help_url()));
+            environment.log(&format!("    {}", plugin_text));
         }
     }
 
@@ -473,7 +475,7 @@ mod tests {
         let environment = get_test_environment_with_remote_plugin();
         environment.write_file(&PathBuf::from("./dprint.config.json"), r#"{
             "projectType": "openSource",
-            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm"]
+            "plugins": ["https://plugins.dprint.dev/test-plugin.wasm", "https://plugins.dprint.dev/test-plugin.wasm"]
         }"#).unwrap();
 
         // run it once to initialize the plugins (this is not a big deal)
@@ -485,7 +487,8 @@ mod tests {
         assert_eq!(logged_messages, vec![
             get_expected_help_text(),
             "\nPLUGINS HELP:",
-            "    test-plugin: https://dprint.dev/plugins/test",
+            "    test-plugin https://dprint.dev/plugins/test",
+            "    test-plugin https://dprint.dev/plugins/test"
         ]);
     }
 
