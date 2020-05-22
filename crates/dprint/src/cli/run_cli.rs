@@ -411,6 +411,7 @@ fn take_array_from_config_map(config_map: &mut ConfigMap, property_name: &str) -
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use crate::environment::{Environment, TestEnvironment};
     use crate::configuration::*;
@@ -898,7 +899,7 @@ mod tests {
     }
 
     fn get_expected_help_text() -> &'static str {
-        r#"dprint 0.4.0-alpha4
+        concat!("dprint ", env!("CARGO_PKG_VERSION"), r#"
 Copyright 2020 by David Sherret
 
 Auto-formats source code based on the specified plugins.
@@ -917,8 +918,8 @@ OPTIONS:
         --init                      Initializes a configuration file in the current directory.
         --output-file-paths         Prints the resolved file paths.
         --output-resolved-config    Prints the resolved configuration.
-        --plugins <urls>...         List of urls for plugins to use. This overrides what is specified in the config
-                                    file.
+        --plugins <urls>...         List of urls of plugins to use (urls separated by spaces). This overrides what is
+                                    specified in the config file.
         --verbose                   Prints additional diagnostic information.
     -v, --version                   Prints the version.
 
@@ -945,7 +946,7 @@ EXAMPLES:
 
     Write using the specified config and file paths:
 
-      dprint --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#
+      dprint --config formatting.config.json "**/*.{ts,tsx,js,jsx,json}""#)
     }
 
     // If this file doesn't exist, run `./build.ps1` in test/plugin. (Please consider helping me do something better here :))
