@@ -37,6 +37,8 @@ fn get_global_config_inner(config_map: ConfigMap, environment: &impl Environment
         let mut global_config = HashMap::new();
 
         for (key, value) in config_map.into_iter() {
+            if key == "$schema" { continue; } // ignore $schema property
+
             if let ConfigMapValue::String(value) = value {
                 global_config.insert(key, value);
             } else {
@@ -91,6 +93,18 @@ mod tests {
             ],
             "Had 2 config diagnostic(s).",
         );
+    }
+
+    #[test]
+    fn it_should_ignore_schema_property() {
+        let mut config_map = HashMap::new();
+        config_map.insert(String::from("$schema"), ConfigMapValue::String(String::from("test")));
+        assert_gets(config_map, GlobalConfiguration {
+            line_width: None,
+            use_tabs: None,
+            indent_width: None,
+            new_line_kind: None,
+        });
     }
 
     fn assert_gets(config_map: ConfigMap, global_config: GlobalConfiguration) {
