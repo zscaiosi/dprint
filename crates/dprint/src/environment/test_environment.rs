@@ -113,15 +113,21 @@ impl Environment for TestEnvironment {
 
         for key in files.keys() {
             let mut has_exclude = false;
-            for ancestor in key.ancestors() {
-                if excludes_set.is_match(ancestor) {
-                    has_exclude = true;
-                    break;
+            if excludes_set.is_match(key.file_name().unwrap()) {
+                has_exclude = true;
+            } else {
+                for ancestor in key.ancestors() {
+                    if excludes_set.is_match(ancestor) {
+                        has_exclude = true;
+                        break;
+                    }
                 }
             }
 
-            if includes_set.is_match(key) && !has_exclude {
-                file_paths.push(key.clone());
+            if !has_exclude {
+                if includes_set.is_match(key) || includes_set.is_match(key.file_name().unwrap()) {
+                    file_paths.push(key.clone());
+                }
             }
         }
 

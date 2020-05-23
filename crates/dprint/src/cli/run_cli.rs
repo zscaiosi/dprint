@@ -363,6 +363,16 @@ fn resolve_file_paths(config_map: &mut ConfigMap, args: &CliArgs, environment: &
         file_patterns.push(String::from("!**/node_modules"));
     }
 
+    // glob walker doesn't support having `./` at the front of paths, so just remove them when they appear
+    for file_pattern in file_patterns.iter_mut() {
+        if file_pattern.starts_with("./") {
+            *file_pattern = String::from(&file_pattern[2..]);
+        }
+        if file_pattern.starts_with("!./") {
+            *file_pattern = format!("!{}", &file_pattern[3..]);
+        }
+    }
+
     environment.glob(&file_patterns)
 }
 
@@ -530,6 +540,31 @@ mod tests {
         assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
         assert_eq!(environment.get_logged_errors().len(), 0);
         assert_eq!(environment.read_file(&file_path).unwrap(), "text_formatted");
+    }
+
+    #[tokio::test]
+    async fn it_should_format_when_specifying_dot_slash_paths() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path = PathBuf::from("/file.txt");
+        environment.write_file(&file_path, "text").unwrap();
+        run_test_cli(vec!["./file.txt"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path).unwrap(), "text_formatted");
+    }
+
+    #[tokio::test]
+    async fn it_should_exclude_a_specified_dot_slash_path() {
+        let environment = get_initialized_test_environment_with_remote_plugin().await.unwrap();
+        let file_path = PathBuf::from("/file.txt");
+        environment.write_file(&file_path, "text").unwrap();
+        let file_path2 = PathBuf::from("/file2.txt");
+        environment.write_file(&file_path2, "text").unwrap();
+        run_test_cli(vec!["./**/*.txt", "--excludes", "./file2.txt"], &environment).await.unwrap();
+        assert_eq!(environment.get_logged_messages(), vec!["Formatted 1 file."]);
+        assert_eq!(environment.get_logged_errors().len(), 0);
+        assert_eq!(environment.read_file(&file_path).unwrap(), "text_formatted");
+        assert_eq!(environment.read_file(&file_path2).unwrap(), "text");
     }
 
     #[tokio::test]
