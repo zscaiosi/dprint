@@ -91,7 +91,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
         .arg(
             Arg::with_name("file patterns")
-                .help("List of file patterns used to find files to format (globs in quotes separated by spaces). This overrides what is specified in the config file.")
+                .help("List of patterns used to find files to format (globs in quotes separated by spaces). This overrides what is specified in the config file.")
                 .takes_value(true)
                 .multiple(true),
         )
@@ -99,7 +99,7 @@ fn create_cli_parser<'a, 'b>() -> clap::App<'a, 'b> {
             Arg::with_name("excludes")
                 .long("excludes")
                 .value_name("patterns")
-                .help("List of file patterns to exclude when formatting (globs in quotes separated by spaces). This overrides what is specified in the config file.")
+                .help("List of patterns to exclude files or directories when formatting (globs in quotes separated by spaces). This overrides what is specified in the config file.")
                 .takes_value(true)
                 .multiple(true),
         )

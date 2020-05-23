@@ -913,8 +913,8 @@ OPTIONS:
         --check                     Checks for any files that haven't been formatted.
         --clear-cache               Deletes the plugin cache directory.
     -c, --config <config>           Path to JSON configuration file. Defaults to ./dprint.config.json when not provided.
-        --excludes <patterns>...    List of file patterns to exclude when formatting (globs in quotes separated by
-                                    spaces). This overrides what is specified in the config file.
+        --excludes <patterns>...    List of patterns to exclude files or directories when formatting (globs in quotes
+                                    separated by spaces). This overrides what is specified in the config file.
         --init                      Initializes a configuration file in the current directory.
         --output-file-paths         Prints the resolved file paths.
         --output-resolved-config    Prints the resolved configuration.
@@ -924,8 +924,8 @@ OPTIONS:
     -v, --version                   Prints the version.
 
 ARGS:
-    <file patterns>...    List of file patterns used to find files to format (globs in quotes separated by spaces).
-                          This overrides what is specified in the config file.
+    <file patterns>...    List of patterns used to find files to format (globs in quotes separated by spaces). This
+                          overrides what is specified in the config file.
 
 EXAMPLES:
     Create a dprint.config.json file:

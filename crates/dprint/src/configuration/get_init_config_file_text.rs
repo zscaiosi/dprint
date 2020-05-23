@@ -40,7 +40,9 @@ pub async fn get_init_config_file_text(environment: &impl Environment) -> Result
         }
     };
 
-    let mut json_text = format!("{{\n  \"projectType\": \"{}\",\n", project_type_name);
+    let mut json_text = String::from("{\n");
+    json_text.push_str("  \"$schema\": \"https://dprint.dev/schemas/v1.json\",\n");
+    json_text.push_str(&format!("  \"projectType\": \"{}\",\n", project_type_name));
 
     if let Some(info) = &info {
         for plugin in info.latest_plugins.iter() {
@@ -114,6 +116,7 @@ mod test {
         assert_eq!(
             text,
             r#"{
+  "$schema": "https://dprint.dev/schemas/v1.json",
   "projectType": "openSource",
   "typescript": {
   },
@@ -140,6 +143,7 @@ mod test {
         assert_eq!(
             text,
             r#"{
+  "$schema": "https://dprint.dev/schemas/v1.json",
   "projectType": "openSource",
   "includes": ["**/*.{ts,tsx,js,jsx,json}"],
   "excludes": [],
@@ -178,6 +182,7 @@ mod test {
         assert_eq!(
             text,
             r#"{
+  "$schema": "https://dprint.dev/schemas/v1.json",
   "projectType": "commercialSponsored",
   "typescript": {
   },
@@ -212,6 +217,7 @@ mod test {
         assert_eq!(
             text,
             r#"{
+  "$schema": "https://dprint.dev/schemas/v1.json",
   "projectType": "openSource",
   "includes": ["**/*.{ts,tsx,js,jsx,json}"],
   "excludes": [],
